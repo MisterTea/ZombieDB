@@ -18,9 +18,9 @@ Most database approaches fall into two categories:
 
 The 2nd option is sold as a "don't think, use this!" option, which is very appealing for database zombies like you and I.  The problem is, there is still some thinking that has to be done:
 
-- If you want to store a thrift object, you need to think.
+- If you want to store a thrift object, you need to think about (de)serialization.
 - If you want to store a thrift object without a unique ID, you need to think.
-- If you need to search for a value but you have something other than the key, then you need to start thinking. For example, "my users have an ID, so I created an ID:User map, but now I need to be able to get all users with the name 'John Smith'.  I am a zombie without a brain, how can I do this??!"
+- If you need to search for a value but you have something other than the key, then you do a lot of thinking. For example, "my users have an ID, so I created an ID:User map, but now I need to be able to get all users with the name 'John Smith'.  I am a zombie without a brain, how can I do this??!"
 
 This is where ZombieDB comes in.  ZombieDB will let you insert, update, find, and remove thrift objects.  ZombieDB will also automatically create any necessary secondary indices.  All you have to do is craft your thrift definition with ZombieDB in mind.  Here is an example thrift object definition with some useful comments:
 
