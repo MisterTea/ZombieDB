@@ -4,7 +4,7 @@ ZombieDB
 ZombieDB is a database wrapper for people who can't think about database internals because they are too busy making awesome happen.  Here are the key features:
 
 - Several key/value database engines are supported, including Cassandra, Jdbm, Redis, and BerkeleyDB.
-- Database schema is completely defined by thrift objects.  You don't need to even think about database schema.
+- Database schema is completely defined by [Thrift](http://thrift.apache.org/) objects.  You don't need to even think about database schema.
 - Primary index (key) is automatically created by looking for an item with the name "id"
 - Secondary indexes are automatically created for all primitive iteams in the thrift object with a tag of 0-15.
 
