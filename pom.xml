@@ -11,7 +11,7 @@
 	<version>1.0</version>
 	<packaging>jar</packaging>
 	<name>Zombie DB</name>
-	<description>Thrift-defined Database wrapper for CRUD of thrift objects.</description>
+	<description>Thrift-specified Database wrapper for CRUD of thrift objects.</description>
 	<url>https://github.com/MisterTea/ZombieDB</url>
 
 	<licenses>
