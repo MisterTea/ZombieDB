@@ -1,13 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<parent>
+		<groupId>org.sonatype.oss</groupId>
+		<artifactId>oss-parent</artifactId>
+		<version>7</version>
+	</parent>
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.zombiedb</groupId>
 	<artifactId>zombiedb</artifactId>
 	<version>1.0</version>
 	<packaging>jar</packaging>
 	<name>Zombie DB</name>
-	<description>Thrift-defined Database wrapper</description>
+	<description>Thrift-defined Database wrapper for CRUD of thrift objects.</description>
 	<url>https://github.com/MisterTea/ZombieDB</url>
 
 	<licenses>
@@ -17,6 +22,19 @@
 			<distribution>repo</distribution>
 		</license>
 	</licenses>
+	<scm>
+		<connection>scm:git:git@github.com:MisterTea/ZombieDB.git</connection>
+		<url>scm:git:git@github.com:MisterTea/ZombieDB.git</url>
+		<developerConnection>scm:git:git@github.com:MisterTea/ZombieDB.git</developerConnection>
+	</scm>
+
+	<developers>
+		<developer>
+			<id>MisterTea</id>
+			<name>Jason Gauci</name>
+			<email>jgmath2000@gmail.com</email>
+		</developer>
+	</developers>
 
 	<build>
 		<sourceDirectory>src</sourceDirectory>
