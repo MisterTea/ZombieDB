@@ -1,4 +1,4 @@
-package com.zombiedb;
+package com.github.mistertea.zombiedb;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -9,7 +9,10 @@ import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.zombiedb.thrift.TestThrift;
+import com.github.mistertea.zombiedb.DatabaseEngine;
+import com.github.mistertea.zombiedb.DatabaseEngineManager;
+import com.github.mistertea.zombiedb.IndexedDatabaseEngineManager;
+import com.github.mistertea.zombiedb.thrift.TestThrift;
 
 @Ignore public class DatabaseTestBase {
 	DatabaseEngine db;

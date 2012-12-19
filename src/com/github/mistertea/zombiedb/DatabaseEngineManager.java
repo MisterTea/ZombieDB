@@ -1,4 +1,4 @@
-package com.zombiedb;
+package com.github.mistertea.zombiedb;
 
 import java.io.IOException;
 import java.util.ArrayList;

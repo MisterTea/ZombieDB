@@ -1,9 +1,13 @@
-package com.zombiedb;
+package com.github.mistertea.zombiedb;
 
 import java.io.IOException;
 
 import org.junit.After;
 import org.junit.Before;
+
+import com.github.mistertea.zombiedb.DatabaseEngineManager;
+import com.github.mistertea.zombiedb.IndexedDatabaseEngineManager;
+import com.github.mistertea.zombiedb.JdbmDatabaseEngine;
 
 public class JdbmTest extends DatabaseTestBase {
 	@Before public void setUp() throws IOException {

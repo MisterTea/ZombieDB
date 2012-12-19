@@ -1,4 +1,4 @@
-package com.zombiedb;
+package com.github.mistertea.zombiedb;
 
 import java.io.File;
 import java.io.IOException;

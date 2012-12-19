@@ -1,4 +1,4 @@
-namespace * com.zombiedb.thrift
+namespace * com.github.mistertea.zombiedb.thrift
 
 struct TestThrift {
        1:string id,

@@ -1,10 +1,14 @@
-package com.zombiedb;
+package com.github.mistertea.zombiedb;
 
 import java.io.IOException;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
+
+import com.github.mistertea.zombiedb.AstyanaxDatabaseEngine;
+import com.github.mistertea.zombiedb.DatabaseEngineManager;
+import com.github.mistertea.zombiedb.IndexedDatabaseEngineManager;
 
 // Ignore this test until EmbeddedCassandra works
 @Ignore
