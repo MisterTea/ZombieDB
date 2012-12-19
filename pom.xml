@@ -8,7 +8,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.zombiedb</groupId>
 	<artifactId>zombiedb</artifactId>
-	<version>1.0-SNAPSHOT</version>
+	<version>1.0</version>
 	<packaging>jar</packaging>
 	<name>Zombie DB</name>
 	<description>Thrift-specified Database wrapper for CRUD of thrift objects.</description>
