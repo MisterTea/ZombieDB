@@ -313,4 +313,8 @@ public class IndexedDatabaseEngineManager {
 	    }
 	    return new String(text);
 	}
+
+	public void commit() {
+		databaseEngine.commit();
+	}
 }
