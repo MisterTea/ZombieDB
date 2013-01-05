@@ -41,7 +41,7 @@ public class TestThrift implements org.apache.thrift.TBase<TestThrift, TestThrif
   private static final org.apache.thrift.protocol.TField S_FIELD_DESC = new org.apache.thrift.protocol.TField("s", org.apache.thrift.protocol.TType.I16, (short)6);
   private static final org.apache.thrift.protocol.TField D_FIELD_DESC = new org.apache.thrift.protocol.TField("d", org.apache.thrift.protocol.TType.DOUBLE, (short)7);
   private static final org.apache.thrift.protocol.TField ST_FIELD_DESC = new org.apache.thrift.protocol.TField("st", org.apache.thrift.protocol.TType.STRING, (short)8);
-  private static final org.apache.thrift.protocol.TField NOT_INDEXED_STRING_FIELD_DESC = new org.apache.thrift.protocol.TField("notIndexedString", org.apache.thrift.protocol.TType.STRING, (short)16);
+  private static final org.apache.thrift.protocol.TField NOT_INDEXED_STRING_FIELD_DESC = new org.apache.thrift.protocol.TField("notIndexedString", org.apache.thrift.protocol.TType.STRING, (short)17);
 
   private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
   static {
@@ -69,7 +69,7 @@ public class TestThrift implements org.apache.thrift.TBase<TestThrift, TestThrif
     S((short)6, "s"),
     D((short)7, "d"),
     ST((short)8, "st"),
-    NOT_INDEXED_STRING((short)16, "notIndexedString");
+    NOT_INDEXED_STRING((short)17, "notIndexedString");
 
     private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
 
@@ -100,7 +100,7 @@ public class TestThrift implements org.apache.thrift.TBase<TestThrift, TestThrif
           return D;
         case 8: // ST
           return ST;
-        case 16: // NOT_INDEXED_STRING
+        case 17: // NOT_INDEXED_STRING
           return NOT_INDEXED_STRING;
         default:
           return null;
@@ -976,7 +976,7 @@ public class TestThrift implements org.apache.thrift.TBase<TestThrift, TestThrif
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
             break;
-          case 16: // NOT_INDEXED_STRING
+          case 17: // NOT_INDEXED_STRING
             if (schemeField.type == org.apache.thrift.protocol.TType.STRING) {
               struct.notIndexedString = iprot.readString();
               struct.setNotIndexedStringIsSet(true);

@@ -9,7 +9,7 @@ struct TestThrift {
        6:i16 s,
        7:double d,
        8:string st,
-       16:string notIndexedString,
+       17:string notIndexedString,
 }
 	
 

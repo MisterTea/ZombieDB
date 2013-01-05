@@ -1,4 +1,4 @@
-package com.github.mistertea.zombiedb;
+package com.github.mistertea.zombiedb.engine;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,6 +11,7 @@ import java.util.logging.Logger;
 
 import org.apache.jdbm.DB;
 import org.apache.jdbm.DBMaker;
+
 
 public class JdbmDatabaseEngine extends DatabaseEngine {
 	private final static Logger logger = Logger.getLogger(JdbmDatabaseEngine.class.getName());
@@ -53,6 +54,72 @@ public class JdbmDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
+	public synchronized void clear(String family) {
+		getOrCreateDb(family).clear();
+	}
+
+	@Override
+	public synchronized void commit() {
+		database.commit();
+	}
+	
+	@Override
+	public synchronized boolean containsKey(String className, String s) {
+		return getOrCreateDb(className).containsKey(s);
+	}
+
+	@Override
+	public synchronized boolean deleteKey(String className, String s) {
+		return getOrCreateDb(className).remove(s)!=null;
+	}
+
+	@Override
+	public synchronized void destroy() {
+		if(database != null && !database.isClosed())
+			database.close();
+		database = null;
+	}
+
+	@Override
+	public synchronized Set<String> getAllIds(String family) {
+		return getOrCreateDb(family).keySet();
+	}
+
+	@Override
+	public synchronized byte[] getBytes(String className, String s) {
+		return getOrCreateDb(className).get(s);
+	}
+
+	public synchronized ConcurrentMap<String, byte[]> getOrCreateDb(String className) {
+		ConcurrentMap<String, byte[]> dbMap = classDbMaps.get(className);
+		if(dbMap == null) {
+			dbMap = database.getHashMap(className);
+			if (dbMap == null) {
+				dbMap = database.createHashMap(className);
+			}
+		}
+		classDbMaps.put(className, dbMap);
+		return dbMap;
+	}
+
+	@Override
+	public synchronized Iterator<byte[]> getValueIterator(String family) {
+		Map<String,byte[]> classDbMap = getOrCreateDb(family);
+		
+		return classDbMap.values().iterator();
+	}
+
+	@Override
+	public synchronized int numValues(String family) {
+		return getOrCreateDb(family).size();
+	}
+
+	@Override
+	public synchronized void putBytes(String className, String key, byte[] value) {
+		getOrCreateDb(className).put(key, value);
+	}
+
+	@Override
 	public synchronized void wipeDatabase() throws IOException {
 		System.out.println("WIPING OLD DATABASE");
 		if(database != null) {
@@ -91,71 +158,5 @@ public class JdbmDatabaseEngine extends DatabaseEngine {
 		if (new File(dbFileName).delete()) {
 			logger.info("WIPED OLD DATABASE");
 		}
-	}
-
-	public synchronized ConcurrentMap<String, byte[]> getOrCreateDb(String className) {
-		ConcurrentMap<String, byte[]> dbMap = classDbMaps.get(className);
-		if(dbMap == null) {
-			dbMap = database.getHashMap(className);
-			if (dbMap == null) {
-				dbMap = database.createHashMap(className);
-			}
-		}
-		classDbMaps.put(className, dbMap);
-		return dbMap;
-	}
-	
-	@Override
-	protected synchronized byte[] getBytes(String className, String s) {
-		return getOrCreateDb(className).get(s);
-	}
-
-	@Override
-	protected synchronized void putBytes(String className, String key, byte[] value) {
-		getOrCreateDb(className).put(key, value);
-	}
-
-	@Override
-	protected synchronized boolean containsKey(String className, String s) {
-		return getOrCreateDb(className).containsKey(s);
-	}
-
-	@Override
-	protected synchronized boolean deleteKey(String className, String s) {
-		return getOrCreateDb(className).remove(s)!=null;
-	}
-
-	@Override
-	protected synchronized int numValues(String family) {
-		return getOrCreateDb(family).size();
-	}
-
-	@Override
-	public synchronized Iterator<byte[]> getValueIterator(String family) {
-		Map<String,byte[]> classDbMap = getOrCreateDb(family);
-		
-		return classDbMap.values().iterator();
-	}
-
-	@Override
-	public synchronized void commit() {
-		database.commit();
-	}
-
-	@Override
-	public synchronized void destroy() {
-		if(database != null && !database.isClosed())
-			database.close();
-		database = null;
-	}
-
-	@Override
-	public synchronized Set<String> getAllIds(String family) {
-		return getOrCreateDb(family).keySet();
-	}
-
-	@Override
-	public synchronized void clear(String family) {
-		getOrCreateDb(family).clear();
 	}
 }

@@ -1,4 +1,4 @@
-package com.github.mistertea.zombiedb;
+package com.github.mistertea.zombiedb.engine;
 
 import java.io.File;
 import java.io.IOException;
@@ -75,64 +75,36 @@ public class BerkeleyDBRawDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public void wipeDatabase() throws IOException {
-    	File baseDir = new File(baseDbDirectory + File.pathSeparator + dbName);
-    	if(baseDir.exists()) {
-    		File files[] = baseDir.listFiles();
-    		for(File file : files) {
-    			file.delete();
-    		}
-    	}
-    	classDbMaps.clear();
+	public synchronized void clear(String family) {
+		Database db = getOrCreateDb(family);
+        // Get a cursor
+		Transaction transaction = myEnv.beginTransaction(null, null);
+        Cursor cursor = db.openCursor(transaction, null);
+
+        // DatabaseEntry objects used for reading records
+        DatabaseEntry foundKey = new DatabaseEntry();
+        DatabaseEntry foundData = new DatabaseEntry();
+
+        while (cursor.getNext(foundKey, foundData,
+                LockMode.DEFAULT) == OperationStatus.SUCCESS) {
+        	cursor.delete();
+        }
+        cursor.close();
+        
+        transaction.commit();
 	}
 
-	private Database getOrCreateDb(String className) {
-		Database dbMap = classDbMaps.get(className);
-		if(dbMap == null) {
-	        classDbMaps.put(className,myEnv.openDatabase(null,className,myDbConfig));
-			return classDbMaps.get(className);
-		}
-		return dbMap;
+	@Override
+	public synchronized void commit() {
 	}
 	
 	@Override
-	synchronized byte[] getBytes(String className, String s) {
-		Database db = getOrCreateDb(className);
-
-        DatabaseEntry key;
-		try {
-			key = new DatabaseEntry(s.getBytes("UTF-8"));
-		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
-			return null;
-		}
-        DatabaseEntry value = new DatabaseEntry();
-		db.get(null, key, value, null);
-		return value.getData();
-	}
-
-	@Override
-	synchronized void putBytes(String className, String keyString, byte[] valueBytes) {
-		Database db = getOrCreateDb(className);
-
-        DatabaseEntry key;
-		try {
-			key = new DatabaseEntry(keyString.getBytes("UTF-8"));
-		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
-			return;
-		}
-        DatabaseEntry value = new DatabaseEntry(valueBytes);
-		db.put(null, key, value);
-	}
-
-	@Override
-	synchronized boolean containsKey(String className, String s) {
+	public synchronized boolean containsKey(String className, String s) {
 		return getBytes(className,s)!=null;
 	}
 
 	@Override
-	synchronized boolean deleteKey(String className, String keyString) throws IOException {
+	public synchronized boolean deleteKey(String className, String keyString) throws IOException {
 		Database db = getOrCreateDb(className);
         DatabaseEntry key;
 		try {
@@ -144,9 +116,10 @@ public class BerkeleyDBRawDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	protected synchronized int numValues(String family) {
-		Database db = getOrCreateDb(family);
-		return (int)db.count();
+	public synchronized void destroy() {
+		if(myEnv != null) {
+			myEnv.close();
+		}
 	}
 
 	@Override
@@ -173,6 +146,31 @@ public class BerkeleyDBRawDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
+	public synchronized byte[] getBytes(String className, String s) {
+		Database db = getOrCreateDb(className);
+
+        DatabaseEntry key;
+		try {
+			key = new DatabaseEntry(s.getBytes("UTF-8"));
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+			return null;
+		}
+        DatabaseEntry value = new DatabaseEntry();
+		db.get(null, key, value, null);
+		return value.getData();
+	}
+
+	private Database getOrCreateDb(String className) {
+		Database dbMap = classDbMaps.get(className);
+		if(dbMap == null) {
+	        classDbMaps.put(className,myEnv.openDatabase(null,className,myDbConfig));
+			return classDbMaps.get(className);
+		}
+		return dbMap;
+	}
+
+	@Override
 	public synchronized Iterator<byte[]> getValueIterator(String family) {
 		Database db = getOrCreateDb(family);
 		List<byte[]> values = new ArrayList<byte[]>();
@@ -193,33 +191,35 @@ public class BerkeleyDBRawDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public synchronized void commit() {
-	}
-
-	@Override
-	public synchronized void destroy() {
-		if(myEnv != null) {
-			myEnv.close();
-		}
-	}
-
-	@Override
-	public synchronized void clear(String family) {
+	public synchronized int numValues(String family) {
 		Database db = getOrCreateDb(family);
-        // Get a cursor
-		Transaction transaction = myEnv.beginTransaction(null, null);
-        Cursor cursor = db.openCursor(transaction, null);
+		return (int)db.count();
+	}
 
-        // DatabaseEntry objects used for reading records
-        DatabaseEntry foundKey = new DatabaseEntry();
-        DatabaseEntry foundData = new DatabaseEntry();
+	@Override
+	public synchronized void putBytes(String className, String keyString, byte[] valueBytes) {
+		Database db = getOrCreateDb(className);
 
-        while (cursor.getNext(foundKey, foundData,
-                LockMode.DEFAULT) == OperationStatus.SUCCESS) {
-        	cursor.delete();
-        }
-        cursor.close();
-        
-        transaction.commit();
+        DatabaseEntry key;
+		try {
+			key = new DatabaseEntry(keyString.getBytes("UTF-8"));
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+			return;
+		}
+        DatabaseEntry value = new DatabaseEntry(valueBytes);
+		db.put(null, key, value);
+	}
+
+	@Override
+	public void wipeDatabase() throws IOException {
+    	File baseDir = new File(baseDbDirectory + File.pathSeparator + dbName);
+    	if(baseDir.exists()) {
+    		File files[] = baseDir.listFiles();
+    		for(File file : files) {
+    			file.delete();
+    		}
+    	}
+    	classDbMaps.clear();
 	}
 }

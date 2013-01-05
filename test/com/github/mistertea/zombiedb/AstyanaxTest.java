@@ -6,11 +6,9 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
 
-import com.github.mistertea.zombiedb.AstyanaxDatabaseEngine;
-import com.github.mistertea.zombiedb.DatabaseEngineManager;
-import com.github.mistertea.zombiedb.IndexedDatabaseEngineManager;
+import com.github.mistertea.zombiedb.engine.AstyanaxDatabaseEngine;
 
-// Ignore this test until EmbeddedCassandra works
+// Ignore this test unless you have a Cassandra server running or until EmbeddedCassandra works
 @Ignore
 public class AstyanaxTest extends DatabaseTestBase {
 	@Before public void setUp() throws IOException {

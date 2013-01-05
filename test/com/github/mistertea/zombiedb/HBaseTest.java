@@ -4,14 +4,15 @@ import java.io.IOException;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 
-import com.github.mistertea.zombiedb.DatabaseEngineManager;
-import com.github.mistertea.zombiedb.IndexedDatabaseEngineManager;
-import com.github.mistertea.zombiedb.engine.JdbmDatabaseEngine;
+import com.github.mistertea.zombiedb.engine.HBaseDatabaseEngine;
 
-public class JdbmTest extends DatabaseTestBase {
+// Ignore this test unless you have an hbase server running
+@Ignore
+public class HBaseTest extends DatabaseTestBase {
 	@Before public void setUp() throws IOException {
-		db = new JdbmDatabaseEngine("", "TestDb", true, false, true, false);
+		db = new HBaseDatabaseEngine("Test", true);
 		dbm = new DatabaseEngineManager(db);
 		idbm = new IndexedDatabaseEngineManager(db);
 	}

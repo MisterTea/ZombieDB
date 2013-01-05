@@ -35,4 +35,13 @@ This is where ZombieDB comes in.  ZombieDB will let you insert, update, find, an
 
 This is all ZombieDB needs to make a database that will store any number of MyThriftObject's.
 
+ZombieDB is in the central maven repository.  To use, add this code to your pom.xml
+
+    <dependency>
+        <groupId>com.github.mistertea</groupId>
+        <artifactId>zombiedb</artifactId>
+        <version>LATEST</version>
+    </dependency>
+
+
 If you have any comments/questions about ZombieDB, please contact me:  jgmath2000@gmail.com

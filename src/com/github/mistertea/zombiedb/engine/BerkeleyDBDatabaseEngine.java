@@ -1,4 +1,4 @@
-package com.github.mistertea.zombiedb;
+package com.github.mistertea.zombiedb.engine;
 
 import java.io.File;
 import java.io.IOException;
@@ -93,65 +93,23 @@ public class BerkeleyDBDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public synchronized void wipeDatabase() throws IOException {
-		for(DbInfo dbInfo : classDbMaps.values()) {
-			dbInfo.database.close();
-		}
-    	classDbMaps.clear();
-    	File baseDir = new File(baseDbDirectory + "/" + dbName);
-    	if(baseDir.exists()) {
-    		File files[] = baseDir.listFiles();
-    		for(File file : files) {
-    			file.delete();
-    		}
-    	}
-	}
-
-	private StoredMap<String,byte[]> getOrCreateDb(String className) {
-		DbInfo info = classDbMaps.get(className);
-		if(info == null) {
-			Database db = myEnv.openDatabase(null,className,myDbConfig);
-			StoredMap<String,byte[]> map = new StoredMap<String,byte[]>(db, new StringBinding(), new ByteArrayBinding(), !readOnly);
-	        classDbMaps.put(className,new DbInfo(db,map));
-			return classDbMaps.get(className).map;
-		}
-		return info.map;
-	}
-	
-	@Override
-	protected synchronized byte[] getBytes(String className, String s) {
-		return getOrCreateDb(className).get(s);
-	}
-
-	@Override
-	protected synchronized void putBytes(String className, String key, byte[] value) {
-		getOrCreateDb(className).put(key, value);
-	}
-
-	@Override
-	protected synchronized boolean containsKey(String className, String s) {
-		return getOrCreateDb(className).containsKey(s);
-	}
-
-	@Override
-	protected synchronized boolean deleteKey(String className, String s) {
-		return getOrCreateDb(className).remove(s)!=null;
-	}
-
-	@Override
-	protected synchronized int numValues(String family) {
-		return getOrCreateDb(family).size();
-	}
-
-	@Override
-	public synchronized Iterator<byte[]> getValueIterator(String family) {
-		Map<String,byte[]> classDbMap = getOrCreateDb(family);
-		
-		return classDbMap.values().iterator();
+	public synchronized void clear(String family) {
+		getOrCreateDb(family).clear();
+		myEnv.compress();
 	}
 
 	@Override
 	public synchronized void commit() {
+	}
+	
+	@Override
+	public synchronized boolean containsKey(String className, String s) {
+		return getOrCreateDb(className).containsKey(s);
+	}
+
+	@Override
+	public synchronized boolean deleteKey(String className, String s) {
+		return getOrCreateDb(className).remove(s)!=null;
 	}
 
 	@Override
@@ -175,13 +133,55 @@ public class BerkeleyDBDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public synchronized void clear(String family) {
-		getOrCreateDb(family).clear();
-		myEnv.compress();
+	public Set<String> getAllIds(String family) {
+		return new HashSet<String>(getOrCreateDb(family).keySet());
 	}
 
 	@Override
-	public Set<String> getAllIds(String family) {
-		return new HashSet<String>(getOrCreateDb(family).keySet());
+	public synchronized byte[] getBytes(String className, String s) {
+		return getOrCreateDb(className).get(s);
+	}
+
+	private StoredMap<String,byte[]> getOrCreateDb(String className) {
+		DbInfo info = classDbMaps.get(className);
+		if(info == null) {
+			Database db = myEnv.openDatabase(null,className,myDbConfig);
+			StoredMap<String,byte[]> map = new StoredMap<String,byte[]>(db, new StringBinding(), new ByteArrayBinding(), !readOnly);
+	        classDbMaps.put(className,new DbInfo(db,map));
+			return classDbMaps.get(className).map;
+		}
+		return info.map;
+	}
+
+	@Override
+	public synchronized Iterator<byte[]> getValueIterator(String family) {
+		Map<String,byte[]> classDbMap = getOrCreateDb(family);
+		
+		return classDbMap.values().iterator();
+	}
+
+	@Override
+	public synchronized int numValues(String family) {
+		return getOrCreateDb(family).size();
+	}
+
+	@Override
+	public synchronized void putBytes(String className, String key, byte[] value) {
+		getOrCreateDb(className).put(key, value);
+	}
+
+	@Override
+	public synchronized void wipeDatabase() throws IOException {
+		for(DbInfo dbInfo : classDbMaps.values()) {
+			dbInfo.database.close();
+		}
+    	classDbMaps.clear();
+    	File baseDir = new File(baseDbDirectory + "/" + dbName);
+    	if(baseDir.exists()) {
+    		File files[] = baseDir.listFiles();
+    		for(File file : files) {
+    			file.delete();
+    		}
+    	}
 	}
 }
