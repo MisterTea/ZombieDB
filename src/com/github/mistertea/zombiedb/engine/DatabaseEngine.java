@@ -4,32 +4,32 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.Set;
 
-public abstract class DatabaseEngine {
-	public DatabaseEngine() {}
+public interface DatabaseEngine {
+	public void acquireLock(String family, String key) throws IOException;
 	
-	public void acquireLock(String family, String key) throws IOException {}
+	public void clear(String family) throws IOException;
 	
-	public abstract void clear(String family) throws IOException;
+	public boolean commit() throws IOException;
 	
-	public abstract void commit() throws IOException;
+	public boolean containsKey(String family, String s) throws IOException;
 	
-	public abstract boolean containsKey(String family, String s) throws IOException;
+	public void deleteKey(String family, String s) throws IOException;
 	
-	public abstract boolean deleteKey(String family, String s) throws IOException;
+	public void destroy() throws IOException;
 	
-	public abstract void destroy();
+	public Set<String> getAllIds(String family) throws IOException;
 	
-	public abstract Set<String> getAllIds(String family) throws IOException;
+	public byte[] getBytes(String family, String key) throws IOException;
 	
-	public abstract byte[] getBytes(String family, String key) throws IOException;
-	
-	public abstract Iterator<byte[]> getValueIterator(String family) throws IOException;
+	public Iterator<byte[]> getValueIterator(String family) throws IOException;
 
-	public abstract int numValues(String family) throws IOException;
+	public int numValues(String family) throws IOException;
 	
-	public abstract void putBytes(String family, String key, byte[] value) throws IOException;
+	public void putBytesBatch(String family, String key, byte[] value) throws IOException;
 
-	public void releaseLock(String family, String key) throws IOException {}
+	public void putBytesAtomic(String family, String key, byte[] value) throws IOException;
+	
+	public void releaseLock(String family, String key) throws IOException;
 
-	public abstract void wipeDatabase() throws IOException;
+	public void wipeDatabase() throws IOException;
 }

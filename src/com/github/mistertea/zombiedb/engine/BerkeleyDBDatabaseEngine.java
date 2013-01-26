@@ -18,7 +18,7 @@ import com.sleepycat.je.DatabaseConfig;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.EnvironmentConfig;
 
-public class BerkeleyDBDatabaseEngine extends DatabaseEngine {
+public class BerkeleyDBDatabaseEngine extends SingleLockDatabaseEngine {
 	static class DbInfo {
 		Database database;
 		StoredMap<String, byte[]> map;
@@ -99,7 +99,8 @@ public class BerkeleyDBDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public synchronized void commit() {
+	public synchronized boolean commit() {
+		return true;
 	}
 	
 	@Override
@@ -108,8 +109,8 @@ public class BerkeleyDBDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public synchronized boolean deleteKey(String className, String s) {
-		return getOrCreateDb(className).remove(s)!=null;
+	public synchronized void deleteKey(String className, String s) {
+		getOrCreateDb(className).remove(s);
 	}
 
 	@Override
@@ -133,7 +134,7 @@ public class BerkeleyDBDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public Set<String> getAllIds(String family) {
+	public synchronized Set<String> getAllIds(String family) {
 		return new HashSet<String>(getOrCreateDb(family).keySet());
 	}
 
@@ -142,7 +143,7 @@ public class BerkeleyDBDatabaseEngine extends DatabaseEngine {
 		return getOrCreateDb(className).get(s);
 	}
 
-	private StoredMap<String,byte[]> getOrCreateDb(String className) {
+	private synchronized StoredMap<String,byte[]> getOrCreateDb(String className) {
 		DbInfo info = classDbMaps.get(className);
 		if(info == null) {
 			Database db = myEnv.openDatabase(null,className,myDbConfig);
@@ -166,10 +167,15 @@ public class BerkeleyDBDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public synchronized void putBytes(String className, String key, byte[] value) {
+	public synchronized void putBytesBatch(String className, String key, byte[] value) {
 		getOrCreateDb(className).put(key, value);
 	}
 
+	@Override
+	public synchronized void putBytesAtomic(String className, String key, byte[] value) {
+		getOrCreateDb(className).put(key, value);
+	}
+	
 	@Override
 	public synchronized void wipeDatabase() throws IOException {
 		for(DbInfo dbInfo : classDbMaps.values()) {

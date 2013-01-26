@@ -60,19 +60,21 @@ public abstract class AbstractDatabaseEngineManager {
 	}
 	
 	/**
-	 * Commits any pending changes to the database.  Note that some database engines will flush changes to the database
+	 * Commits any pending upserts to the database.  Note that some database engines will flush changes to the database
 	 * even without a commit.
 	 *
 	 * @throws IOException Signals that an I/O exception has occurred.
+	 * @return True if the commit succeeded, false if it failed.
 	 */
-	public synchronized void commit() throws IOException {
-		databaseEngine.commit();
+	public synchronized boolean commit() throws IOException {
+		return databaseEngine.commit();
 	}
 	
 	/**
 	 * Creates a new entry in the database for a thrift object.  Note that this method expects
 	 * the object to have no id.  For objects that already have a unique id, use {@link #createWithId(TBase) createWithId}.
-	 *
+	 * Create operations are atomic.
+	 * 
 	 * @param thrift the object to create
 	 * @throws IOException Signals that an I/O exception has occurred.
 	 */
@@ -83,43 +85,52 @@ public abstract class AbstractDatabaseEngineManager {
 			throw new IOException("Tried to autogenerate a key for an object that already had a key");
 		}
 		
-		String s = null;
-		do {
-			s = generateString(16);
-		} while(get(thrift.getClass(), s) != null);
-		
-		try {
-			thrift.setFieldValue(thrift.fieldForId(1), s);
-			update(thrift);
-		} catch (Exception e) {
-			throw new IOException(e);
+		String newId = null;
+		while(true) {
+			newId = generateString(16);
+			thrift.setFieldValue(thrift.fieldForId(1), newId);
+			T existingThrift = (T)getAndLockPrimaryKey(thrift.getClass(), newId);
+			try {
+				if (existingThrift == null) {
+					upsertNoPrimaryLock(existingThrift, thrift);
+					return;
+				}
+			} finally {
+				releasePrimaryKeyLock(thrift.getClass(), newId);
+			}
 		}
 	}
+	
+	protected abstract <F extends TFieldIdEnum, T extends TBase<?, F>> T getAndLockPrimaryKey(Class<T> in, String key) throws IOException;
+	
+	protected abstract <F extends TFieldIdEnum, T extends TBase<?, F>> void releasePrimaryKeyLock(Class<T> in, String key) throws IOException;
 	
 	/**
 	 * Creates a new entry in the database for a thrift object.  Note that this method expects
 	 * the object to have an id.  For objects that do not have a unique id populated,
-	 * use {@link #create(TBase) create}.
+	 * use {@link #create(TBase) create}. Create operations are atomic.
 	 *
 	 * @param thrift the object to create
 	 * @throws IOException Signals that an I/O exception has occurred.
+	 * @return False if an object with the same ID existed, true otherwise.
 	 */
 	@SuppressWarnings("unchecked")
-	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void createWithId(T thrift) throws IOException {
+	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> boolean createWithId(T thrift) throws IOException {
+		String id = (String)thrift.getFieldValue(thrift.fieldForId(1));
+		T existingThrift = (T)getAndLockPrimaryKey(thrift.getClass(), id);
 		try {
-			String s = (String)thrift.getFieldValue(thrift.fieldForId(1));
-			if(get(thrift.getClass(), s) != null) {
-				throw new IOException("Tried to create a new record with a forced duplicate ID: " + s);
+			if(existingThrift != null) {
+				return false;
 			}
-
-			update(thrift);
-		} catch (Exception e) {
-			throw new IOException(e);
+			upsertNoPrimaryLock(existingThrift, thrift);
+		} finally {
+			releasePrimaryKeyLock(thrift.getClass(), id);
 		}
+		return true;
 	}
 	
 	/**
-	 * Delete a thrift object.
+	 * Delete a thrift object. Delete operations in ZombieDB are atomic.
 	 *
 	 * @param thrift the object to delete
 	 * @throws IOException Signals that an I/O exception has occurred.
@@ -127,7 +138,7 @@ public abstract class AbstractDatabaseEngineManager {
 	public abstract <F extends TFieldIdEnum, T extends TBase<?, F>> void delete(T thrift) throws IOException;
 	
 	/**
-	 * Delete a thrift object given its id.
+	 * Delete a thrift object given its id. Delete operations in ZombieDB are atomic.
 	 *
 	 * @param in the type of object to delete
 	 * @param id the id of the object
@@ -140,8 +151,9 @@ public abstract class AbstractDatabaseEngineManager {
 	
 	/**
 	 * Destroy the underlying database and clean up any resources it holds.
+	 * @throws IOException 
 	 */
-	public synchronized void destroy() {
+	public synchronized void destroy() throws IOException {
 		databaseEngine.destroy();
 	}
 
@@ -277,7 +289,7 @@ public abstract class AbstractDatabaseEngineManager {
 				try {
 					T t = in.newInstance();
 					deserializer.deserialize(t, value.getBytes());
-					update(t);
+					upsert(t);
 					if(count%100==0)
 						databaseEngine.commit();
 					count++;
@@ -290,7 +302,16 @@ public abstract class AbstractDatabaseEngineManager {
 			reader.close();
 		}
 	}
-		
+
+	/**
+	 * HBase invalidates RowLock objects when a table is disabled.  Registering classes during initialization ensures that the table structure does not need
+	 * to change at runtime, preventing disables while other threads may have a lock active.
+	 * 
+	 * @param thrift The object to register.
+	 * @throws IOException 
+	 */
+	public abstract <F extends TFieldIdEnum, T extends TBase<?, F>> void register(Class<T> thriftClass) throws IOException;
+	
 	/**
 	 * Get the number of objects of a particular type.
 	 *
@@ -301,13 +322,24 @@ public abstract class AbstractDatabaseEngineManager {
 	public abstract <F extends TFieldIdEnum, T extends TBase<?, F>> int size(Class<T> in) throws IOException;
 
 	/**
-	 * Updates a thrift object that has changed in memory.
+	 * Updates/Inserts a thrift object that has changed in memory. Upserting is atomic.
+	 *
+	 * @param thrift the thrift object to upserts
+	 * @throws IOException Signals that an I/O exception has occurred.
+	 */
+	public abstract <F extends TFieldIdEnum, T extends TBase<?, F>> void upsert(T thrift) throws IOException;
+
+	protected abstract <F extends TFieldIdEnum, T extends TBase<?, F>> void upsertNoPrimaryLock(T staleThrift, T thrift) throws IOException;
+	
+	/**
+	 * Updates a thrift object that has changed in memory. The upsert is not always atomic which offers better performance but
+	 * is not acceptable in all scenarios.
 	 *
 	 * @param thrift the thrift
 	 * @throws IOException Signals that an I/O exception has occurred.
 	 */
-	public abstract <F extends TFieldIdEnum, T extends TBase<?, F>> void update(T thrift) throws IOException;
-
+	public abstract <F extends TFieldIdEnum, T extends TBase<?, F>> void upsertNonAtomic(T thrift) throws IOException;
+	
 	/**
 	 * Wipe database.
 	 *

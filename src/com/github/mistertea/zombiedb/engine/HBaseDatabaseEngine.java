@@ -1,17 +1,24 @@
 package com.github.mistertea.zombiedb.engine;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
+import org.apache.hadoop.hbase.InvalidFamilyOperationException;
+import org.apache.hadoop.hbase.TableNotEnabledException;
+import org.apache.hadoop.hbase.UnknownRowLockException;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
@@ -19,11 +26,12 @@ import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.RetriesExhaustedException;
 import org.apache.hadoop.hbase.client.Row;
+import org.apache.hadoop.hbase.client.RowLock;
 import org.apache.hadoop.hbase.client.Scan;
 
-
-public class HBaseDatabaseEngine extends DatabaseEngine {
+public class HBaseDatabaseEngine implements DatabaseEngine {
 	class HBaseIteratorWrapper implements Iterator<byte[]> {
 		private Iterator<Result> resultIterator;
 		private byte[] family;
@@ -58,13 +66,14 @@ public class HBaseDatabaseEngine extends DatabaseEngine {
 	private List<Row> commands = new ArrayList<Row>();
 
 	private Set<String> knownFamilies = new HashSet<String>();
+	private Map<String, HBaseLock> locks = new HashMap<String, HBaseLock>();
 
 	public HBaseDatabaseEngine(String clusterName, boolean wipe) throws IOException {
 		super();
 		
 		this.clusterName = clusterName;
 		
-		logger.info("Creating HBase Engine");
+		logger.fine("Creating HBase Engine");
 		configuration = HBaseConfiguration.create();
 	    configuration.clear();
 
@@ -91,13 +100,14 @@ public class HBaseDatabaseEngine extends DatabaseEngine {
 		createColumnFamilyIfNecessary(family);
 		Delete delete = new Delete();
 		delete.deleteFamily(family.getBytes("ISO-8859-1"));
-		commands.add(delete);
+		table.delete(delete);
 	}
 
 	@Override
-	public void commit() throws IOException {
+	public boolean commit() throws IOException {
 		if(commands.isEmpty()) {
-			return;
+			table.flushCommits();
+			return true;
 		}
 		try {
 			Object[] results = table.batch(commands);
@@ -108,6 +118,7 @@ public class HBaseDatabaseEngine extends DatabaseEngine {
 			}
 			table.flushCommits();
 			commands.clear();
+			return true;
 		} catch (InterruptedException e) {
 			throw new IOException(e);
 		}
@@ -125,32 +136,80 @@ public class HBaseDatabaseEngine extends DatabaseEngine {
 			return;
 		}
 		
+		// Wait for the table to become enabled
+		for(int a=0;!admin.isTableEnabled(clusterName) && a<100;a++) {
+			logger.fine("Waiting for table to become enabled...");
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException e) {
+				break;
+			}
+			continue;
+		}
+		
 		if(!table.getTableDescriptor().hasFamily(family.getBytes("ISO-8859-1"))) {
-			admin.disableTable(clusterName);
-			admin.addColumn(clusterName, new HColumnDescriptor(family.getBytes("ISO-8859-1")));
-			admin.enableTable(clusterName);
+			boolean done = false;
+			logger.fine("ADDING FAMILY: " + family);
+			while(true) {
+				try {
+					admin.disableTable(clusterName);
+					if(admin.isTableEnabled(clusterName)) {
+						continue;
+					}
+					break;
+				} catch(TableNotEnabledException tnee) {
+					if(table.getTableDescriptor().hasFamily(family.getBytes("ISO-8859-1"))) {
+						// Someone else created this family for us
+						done=true;
+						break;
+					}
+					try {
+						Thread.sleep(10);
+					} catch (InterruptedException e) {
+						break;
+					}
+				}
+			}
+			if(!done) {
+				try {
+					admin.addColumn(clusterName, new HColumnDescriptor(family.getBytes("ISO-8859-1")));
+				} catch(InvalidFamilyOperationException ifoe) {
+					// If another thread created the column, it's ok.
+					if (!ifoe.getMessage().contains("already exists")) {
+						throw new IOException(ifoe);
+					}
+				}
+				admin.enableTable(clusterName);
+			}
 		}
 		knownFamilies.add(family);
 	}
 
 	private void createTable() throws IOException {
 	    table = new HTable(configuration, clusterName);
+	    table.setAutoFlush(true);
 	    knownFamilies.clear();
 	}
 
 	@Override
-	public boolean deleteKey(String family, String key) throws IOException {
+	public void deleteKey(String family, String key) throws IOException {
+		//System.out.println("DELETING: " + family + " : " + key);
 		createColumnFamilyIfNecessary(family);
-		Delete delete = new Delete(key.getBytes("ISO-8859-1"));
-		delete.deleteColumn(family.getBytes("ISO-8859-1"), qualifier);
+		Delete delete = null;
+		if(!locks.containsKey(key) || !locks.get(key).families.contains(family)) {
+			delete = new Delete(key.getBytes("ISO-8859-1"));
+		} else {
+			delete = new Delete(key.getBytes("ISO-8859-1"), 0L, locks.get(key).lock);
+		}
+		delete.deleteColumns(family.getBytes("ISO-8859-1"), qualifier);
 		table.delete(delete);
-		return true;
+		logger.fine("DELETING: " + family + " : " + key);
 	}
 
 	@Override
-	public void destroy() {
-		// TODO Auto-generated method stub
-		
+	public void destroy() throws IOException {
+		admin.close();
+		table.close();
 	}
 
 	@Override
@@ -198,18 +257,34 @@ public class HBaseDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public void putBytes(String family, String key, byte[] value)
+	public void putBytesBatch(String family, String key, byte[] value)
 			throws IOException {
+		//System.out.println("PUT BYTES NON ATOMIC " + family + " : " + key);
 		createColumnFamilyIfNecessary(family);
-		if(containsKey(family,key)) {
-			// HBase is a multimap, but ZombieDB assumes a map.  This ensures HBase acts like a map.
-			deleteKey(family,key);
+		HBaseLock lock = locks.get(key);
+		if(lock == null) {
+			throw new IOException("No lock found for " + key);
 		}
-		Put put = new Put(key.getBytes("ISO-8859-1"));
+		Put put = new Put(key.getBytes("ISO-8859-1"), lock.lock);
 		put.add(family.getBytes("ISO-8859-1"), qualifier, value);
 		commands.add(put);
 	}
 
+	@Override
+	public void putBytesAtomic(String family, String key, byte[] value)
+			throws IOException {
+		//System.out.println("PUT BYTES " + family + " : " + key);
+		createColumnFamilyIfNecessary(family);
+		Put put = null;
+		if (locks.containsKey(key)) {
+			put = new Put(key.getBytes("ISO-8859-1"), locks.get(key).lock);
+		} else {
+			put = new Put(key.getBytes("ISO-8859-1"));
+		}
+		put.add(family.getBytes("ISO-8859-1"), qualifier, value);
+		table.put(put);
+	}
+	
 	@Override
 	public synchronized void wipeDatabase() throws IOException {
 		if (admin.tableExists(clusterName)) {
@@ -220,6 +295,66 @@ public class HBaseDatabaseEngine extends DatabaseEngine {
 		}
 	    admin.createTable(new HTableDescriptor(clusterName));
 	    createTable();
+	}
+	
+	class HBaseLock {
+		RowLock lock;
+		Set<String> families = new HashSet<String>();
+		
+		HBaseLock(String key) throws IOException {
+			while(true) {
+				try {
+					lock = table.lockRow(key.getBytes("ISO-8859-1"));
+					return;
+				} catch (UnsupportedEncodingException e) {
+					throw new IOException(e);
+				} catch (RetriesExhaustedException ree) {
+					try {
+						Thread.sleep(1000);
+					} catch (InterruptedException e) {
+						throw new IOException(e);
+					}
+					logger.warning("Retries exhausted while locking row " + key);
+				} catch (IOException e) {
+					throw new IOException(e);
+				}
+			}
+		}
+	}
+
+	@Override
+	public void acquireLock(String family, String key) throws IOException {
+		createColumnFamilyIfNecessary(family);
+		HBaseLock lock = locks.get(key);
+		if(lock == null) {
+			logger.fine(String.valueOf(Thread.currentThread().getId()) + " GETTING LOCK " + family + " : " + key);
+			lock = new HBaseLock(key);
+			logger.fine(String.valueOf(Thread.currentThread().getId()) + " GOT LOCK " + family + " : " + key);
+		}
+		lock.families.add(family);
+		locks.put(key, lock);
+	}
+
+	@Override
+	public void releaseLock(String family, String key) throws IOException {
+		createColumnFamilyIfNecessary(family);
+		HBaseLock lock = locks.get(key);
+		if(lock == null) {
+			// Assume the entry was deleted
+			return;
+		}
+		lock.families.remove(family);
+		if (lock.families.isEmpty()) {
+			try {
+				logger.fine(String.valueOf(Thread.currentThread().getId()) + " RELEASING LOCK " + family + " : " + key);
+				table.unlockRow(lock.lock);
+				logger.fine(String.valueOf(Thread.currentThread().getId()) + " RELEASED LOCK " + family + " : " + key);
+			} catch(UnknownRowLockException urle) {
+				// This is ok, it means we deleted the row and so the lock cannot be found.
+				logger.log(Level.INFO, "Could not find row lock: " + key, urle);
+			}
+			locks.remove(key);
+		}
 	}
 
 }

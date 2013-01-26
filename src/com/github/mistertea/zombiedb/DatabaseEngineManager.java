@@ -1,6 +1,7 @@
 package com.github.mistertea.zombiedb;
 
 import java.io.IOException;
+import java.util.logging.Logger;
 
 import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
@@ -13,6 +14,7 @@ import com.github.mistertea.zombiedb.engine.DatabaseEngine;
  * if you want secondary keys.
  */
 public class DatabaseEngineManager extends AbstractDatabaseEngineManager {
+	private final static Logger logger = Logger.getLogger(DatabaseEngineManager.class.getName());
 	
 	/**
 	 * Instantiates a new database engine manager.
@@ -78,16 +80,55 @@ public class DatabaseEngineManager extends AbstractDatabaseEngineManager {
 	}
 	
 	/**
-	 * @see com.github.mistertea.zombiedb.AbstractDatabaseEngineManager#update(org.apache.thrift.TBase)
+	 * @see com.github.mistertea.zombiedb.AbstractDatabaseEngineManager#upsert(org.apache.thrift.TBase)
 	 */
 	@Override
-	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void update(T thrift) throws IOException {
+	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void upsert(T thrift) throws IOException {
 		try {
 			String id = (String)thrift.getFieldValue(thrift.fieldForId(1));
 			
-			databaseEngine.putBytes(thrift.getClass().getSimpleName(), id, serializer.serialize(thrift));
+			databaseEngine.putBytesAtomic(thrift.getClass().getSimpleName(), id, serializer.serialize(thrift));
 		} catch (Exception e) {
 			throw new IOException(e);
 		}
+	}
+
+	@Override
+	protected synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void upsertNoPrimaryLock(T staleThrift, T thrift) throws IOException {
+		upsert(thrift);
+	}
+	
+	/**
+	 * @see com.github.mistertea.zombiedb.AbstractDatabaseEngineManager#upsertNonAtomic(org.apache.thrift.TBase)
+	 */
+	@Override
+	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void upsertNonAtomic(T thrift) throws IOException {
+		try {
+			String id = (String)thrift.getFieldValue(thrift.fieldForId(1));
+			
+			databaseEngine.putBytesBatch(thrift.getClass().getSimpleName(), id, serializer.serialize(thrift));
+		} catch (Exception e) {
+			throw new IOException(e);
+		}
+	}
+
+	@Override
+	protected <F extends TFieldIdEnum, T extends TBase<?, F>> T getAndLockPrimaryKey(
+			Class<T> in, String id) throws IOException {
+		databaseEngine.acquireLock(in.getSimpleName(), id);
+		return get(in, id);
+	}
+
+	@Override
+	protected <F extends TFieldIdEnum, T extends TBase<?, F>> void releasePrimaryKeyLock(Class<T> in, String id) throws IOException {
+		databaseEngine.releaseLock(in.getSimpleName(), id);
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
+	public <F extends TFieldIdEnum, T extends TBase<?, F>> void register(
+			Class<T> thriftClass) throws IOException {
+		get(thriftClass, "null");
+		logger.info("Registered " + thriftClass.getSimpleName());
 	}
 }

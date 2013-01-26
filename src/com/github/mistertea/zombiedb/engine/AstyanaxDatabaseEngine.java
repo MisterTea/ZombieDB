@@ -9,6 +9,8 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
+import org.apache.cassandra.thrift.InvalidRequestException;
+
 import com.netflix.astyanax.AstyanaxContext;
 import com.netflix.astyanax.Cluster;
 import com.netflix.astyanax.ExceptionCallback;
@@ -16,6 +18,7 @@ import com.netflix.astyanax.Keyspace;
 import com.netflix.astyanax.MutationBatch;
 import com.netflix.astyanax.connectionpool.NodeDiscoveryType;
 import com.netflix.astyanax.connectionpool.OperationResult;
+import com.netflix.astyanax.connectionpool.exceptions.BadRequestException;
 import com.netflix.astyanax.connectionpool.exceptions.ConnectionException;
 import com.netflix.astyanax.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.astyanax.connectionpool.impl.Slf4jConnectionPoolMonitorImpl;
@@ -23,6 +26,7 @@ import com.netflix.astyanax.ddl.ColumnFamilyDefinition;
 import com.netflix.astyanax.impl.AstyanaxConfigurationImpl;
 import com.netflix.astyanax.model.ColumnFamily;
 import com.netflix.astyanax.model.ColumnList;
+import com.netflix.astyanax.model.ConsistencyLevel;
 import com.netflix.astyanax.model.Row;
 import com.netflix.astyanax.model.Rows;
 import com.netflix.astyanax.recipes.locks.ColumnPrefixDistributedRowLock;
@@ -31,7 +35,7 @@ import com.netflix.astyanax.serializers.StringSerializer;
 import com.netflix.astyanax.thrift.ThriftFamilyFactory;
 import com.netflix.astyanax.util.RangeBuilder;
 
-public class AstyanaxDatabaseEngine extends DatabaseEngine {
+public class AstyanaxDatabaseEngine implements DatabaseEngine {
 	class FamilyRowPair {
 		public String columnFamilyName;
 		public String rowName;
@@ -46,6 +50,11 @@ public class AstyanaxDatabaseEngine extends DatabaseEngine {
 			FamilyRowPair other = (FamilyRowPair)otherObject;
 			return columnFamilyName.equals(other.columnFamilyName) &&
 					rowName.equals(other.rowName);
+		}
+		
+		@Override
+		public int hashCode() {
+			return rowName.hashCode();
 		}
 	}
 	public class ThriftWrapperCassandraIterator implements Iterator<byte[]> {
@@ -119,7 +128,7 @@ public class AstyanaxDatabaseEngine extends DatabaseEngine {
 		context = new AstyanaxContext.Builder()
 		.forCluster(clusterName)
 		.forKeyspace(dbName)
-		.withAstyanaxConfiguration(new AstyanaxConfigurationImpl()      
+		.withAstyanaxConfiguration(new AstyanaxConfigurationImpl().setDefaultWriteConsistencyLevel(ConsistencyLevel.CL_ALL).setDefaultReadConsistencyLevel(ConsistencyLevel.CL_ALL)
 		.setDiscoveryType(NodeDiscoveryType.NONE)
 		.setRetryPolicy(new BoundedExponentialBackoff(250, 5000, 100))
 				)
@@ -157,23 +166,6 @@ public class AstyanaxDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public synchronized void acquireLock(String className, String key) throws IOException {
-		ColumnPrefixDistributedRowLock<String> lock = 
-				new ColumnPrefixDistributedRowLock<String>(keySpace, getOrCreateColumnFamily(className), key)
-				.withBackoff(new BoundedExponentialBackoff(250, 10000, 10))
-				.expireLockAfter(10, TimeUnit.SECONDS);
-
-		try {
-			lock.acquire();
-		}
-		catch (Exception e) {
-			throw new IOException(e);
-		}
-
-		locks.put(new FamilyRowPair(className, key), lock);
-	}
-
-	@Override
 	public synchronized void clear(String family) throws IOException {
 		Set<String> keys = getAllIds(family);
 		for(String key : keys) {
@@ -182,9 +174,9 @@ public class AstyanaxDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public synchronized void commit() throws IOException {
+	public synchronized boolean commit() throws IOException {
 		if(mutationBatch == null)
-			return;
+			return true;
 		
 		try {
 		    mutationBatch.execute();
@@ -193,6 +185,7 @@ public class AstyanaxDatabaseEngine extends DatabaseEngine {
 		} finally {
 			mutationBatch = null;
 		}
+		return true;
 	}
 
 	@Override
@@ -220,24 +213,19 @@ public class AstyanaxDatabaseEngine extends DatabaseEngine {
 		}
 	}
 
-	private void createMutationBatchIfNeeded() {
+	private synchronized void createMutationBatchIfNeeded() {
 		if(mutationBatch == null) {
 			mutationBatch = keySpace.prepareMutationBatch();
 		}
 	}
 
 	@Override
-	public synchronized boolean deleteKey(String className, String key) throws IOException {
-		if(!containsKey(className, key)) {
-			return false;
+	public synchronized void deleteKey(String family, String key) throws IOException {
+		try {
+			keySpace.prepareColumnMutation(getOrCreateColumnFamily(family), key, "Data").deleteColumn().execute();
+		} catch (ConnectionException e) {
+			throw new IOException(e);
 		}
-		
-		createMutationBatchIfNeeded();
-		
-		// Deleting an entire row
-		mutationBatch.withRow(getOrCreateColumnFamily(className), key).delete();
-		
-		return true;
 	}
 
 	@Override
@@ -280,6 +268,7 @@ public class AstyanaxDatabaseEngine extends DatabaseEngine {
 
 	@Override
 	public synchronized byte[] getBytes(String className, String key) throws IOException {
+		logger.fine("GETTING: " + className + " : " + key);
 		OperationResult<ColumnList<String>> result;
 		try {
 			result = keySpace.prepareQuery(getOrCreateColumnFamily(className))
@@ -294,10 +283,11 @@ public class AstyanaxDatabaseEngine extends DatabaseEngine {
 			return null;
 		}
 
+		logger.fine("GETTING: " + className + " : " + key + " = " + columns.getColumnByName("Data").getByteArrayValue());
 		return columns.getColumnByName("Data").getByteArrayValue();
 	}
 
-	private ColumnFamily<String, String> getOrCreateColumnFamily(String columnFamilyName) throws IOException {
+	private synchronized ColumnFamily<String, String> getOrCreateColumnFamily(String columnFamilyName) throws IOException {
 		ColumnFamily<String,String> retval = columnFamilyMaps.get(columnFamilyName);
 
 		if(retval != null) {
@@ -319,6 +309,10 @@ public class AstyanaxDatabaseEngine extends DatabaseEngine {
 						.setKeyValidationClass("UTF8Type")
 						.addColumnDefinition(cluster.makeColumnDefinition().setName("Data").setValidationClass("BytesType"))
 						);
+			} catch (BadRequestException e) {
+				if(!e.getMessage().contains("already existing")){ // Handle case where another client has already created this column family
+					throw new IOException(e);
+				}
 			} catch (ConnectionException e) {
 				throw new IOException(e);
 			}
@@ -361,14 +355,45 @@ public class AstyanaxDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public synchronized void putBytes(String className, String key, byte[] value) throws IOException {
+	public synchronized void putBytesBatch(String className, String key, byte[] value) throws IOException {
 		createMutationBatchIfNeeded();
 		
 		mutationBatch.withRow(getOrCreateColumnFamily(className), key).putColumn("Data", value);
 	}
 
 	@Override
+	public void putBytesAtomic(String family, String key, byte[] value)
+			throws IOException {
+		try {
+			keySpace.prepareColumnMutation(getOrCreateColumnFamily(family), key, "Data").putValue(value, null).execute();
+		} catch (ConnectionException e) {
+			throw new IOException(e);
+		}
+	}
+	
+	@Override
+	public synchronized void acquireLock(String className, String key) throws IOException {
+		ColumnPrefixDistributedRowLock<String> lock = 
+				new ColumnPrefixDistributedRowLock<String>(keySpace, getOrCreateColumnFamily(className), key)
+				.withBackoff(new BoundedExponentialBackoff(250, 60000, 20))
+				.withConsistencyLevel(ConsistencyLevel.CL_ALL)
+				.expireLockAfter(600, TimeUnit.SECONDS);
+
+		try {
+			lock.acquire();
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+			throw new IOException(e);
+		}
+
+		logger.fine("LOCKING: " + className + " : " + key);
+		locks.put(new FamilyRowPair(className, key), lock);
+	}
+
+	@Override
 	public synchronized void releaseLock(String className, String key) throws IOException {
+		logger.fine("UNLOCKING: " + className + " : " + key);
 		ColumnPrefixDistributedRowLock<String> lock = locks.get(new FamilyRowPair(className, key));
 		if(lock == null) {
 			throw new IOException("Tried to release unknown lock");

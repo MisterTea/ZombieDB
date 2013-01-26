@@ -7,9 +7,17 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import junitx.framework.ComparableAssert;
 
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -21,6 +29,8 @@ import com.github.mistertea.zombiedb.thrift.TestThrift;
 	DatabaseEngine db;
 	DatabaseEngineManager dbm;
 	IndexedDatabaseEngineManager idbm;
+	
+	List<DatabaseConnection> concurrentConnections = new ArrayList<DatabaseConnection>();
 
 	private static final String CHARACTERS = "123456789qwertyuiopasdfghjklzxcvbnm";
 
@@ -36,6 +46,13 @@ import com.github.mistertea.zombiedb.thrift.TestThrift;
 
 	private TestThrift getLast(ArrayList<? extends TestThrift> arrayList) {
 		return arrayList.get(arrayList.size()-1);
+	}
+
+	@After public void shutDown() throws Exception {
+		for(int a=0;a<concurrentConnections.size();a++) {
+			concurrentConnections.get(a).db.destroy();
+		}
+		concurrentConnections.clear();
 	}
 
 	@Test public void startServer() throws Exception {
@@ -56,6 +73,7 @@ import com.github.mistertea.zombiedb.thrift.TestThrift;
 			Assert.assertEquals(tt, ttReturn);
 		}
 
+		System.out.println("CREATING WITH ID");
 		for(int test=0;test<1000;test++) {
 			TestThrift tt = new TestThrift(String.valueOf(test), r.nextInt(), r.nextLong(), r.nextBoolean(), (byte)r.nextInt(),
 					(short)r.nextInt(), r.nextDouble(), generateString(r, 16), "abc");
@@ -252,8 +270,10 @@ import com.github.mistertea.zombiedb.thrift.TestThrift;
 			}
 			
 			for(int i=0;i<100;i++) {
-				db.putBytes("MyClass", "key"+i, b[i]);
+				db.acquireLock("MyClass", "key"+i);
+				db.putBytesBatch("MyClass", "key"+i, b[i]);
 				db.commit();
+				db.releaseLock("MyClass", "key"+i);
 				byte[] ret = db.getBytes("MyClass", "key"+i);
 				Assert.assertArrayEquals(b[i], ret);
 			}
@@ -283,6 +303,7 @@ import com.github.mistertea.zombiedb.thrift.TestThrift;
 
 		new File("TestThrift.sf").delete();
 	}
+
 	@Test public void testSerializeIndexed() throws Exception {
 		idbm.wipeDatabase();
 		Random r = new Random(1L);
@@ -306,5 +327,135 @@ import com.github.mistertea.zombiedb.thrift.TestThrift;
 
 		new File("TestThrift.sf").delete();
 		new File(".TestThrift.sf.crc").delete();
+	}
+	
+	// ACID tests
+	
+	// All connections fight to create objects with the same id
+	@Test
+	public void testAtomicCreate() throws Exception {
+		db.wipeDatabase();
+		final ConcurrentMap<String, TestThrift> internalView = new ConcurrentHashMap<String, TestThrift>();
+		final Random r = new Random(1L);
+		ExecutorService threadPool = Executors.newFixedThreadPool(concurrentConnections.size());
+		List<Future<?>> futures = new ArrayList<Future<?>>();
+		for(int a=0;a<concurrentConnections.size();a++) {
+			final int threadId = a;
+			Future<?> future = threadPool.submit(new Runnable() {
+				@Override
+				public void run() {
+					final DatabaseEngineManager dbmLocal = concurrentConnections.get(threadId).dbm;
+					try {
+						dbmLocal.register(TestThrift.class);
+					} catch (IOException e1) {
+						throw new RuntimeException(e1);
+					}
+					try {
+						Thread.sleep(10000);
+					} catch (InterruptedException e1) {
+						e1.printStackTrace();
+					}
+					int curId=0;
+					for(int b=0;b<1000;b++) {
+						while(true) {
+							TestThrift tt = new TestThrift(""+curId, r.nextInt(), r.nextLong(), r.nextBoolean(), (byte)r.nextInt(),
+									(short)r.nextInt(), r.nextDouble(), generateString(r, 16), "abc");
+							try {
+								if(concurrentConnections.get(threadId).dbm.createWithId(tt)) {
+									System.out.println("Added entry with id" + tt.id);
+									if(internalView.put(tt.id, tt) != null) {
+										Assert.fail("Was able to add a duplicate ID to the database: " + tt);
+									} else {
+										//System.out.println("Created object with id: " + tt.id);
+										break;
+									}
+								} else {
+									curId++;
+								}
+							} catch (IOException e) {
+								System.out.println("GOT EXCEPTION " + e.getMessage());
+								e.printStackTrace();
+								throw new RuntimeException(e);
+							}
+						}
+					}
+				}
+				
+			});
+			futures.add(future);
+		}
+		threadPool.shutdown();
+		boolean timedOut=true;
+		while(timedOut) {
+			timedOut=false;
+			for(Future<?> future : futures) {
+				try {
+					if(future.get(1, TimeUnit.SECONDS) != null) {
+						Assert.fail("FUTURE FAILED");
+					}
+				} catch(TimeoutException e) {
+					timedOut = true;
+				}
+			}
+		}
+	}
+
+	// All connections fight to update the same indexed object
+	@Test
+	public void testAtomicUpdate() throws Exception {
+		idbm.wipeDatabase();
+		final Random r = new Random(1L);
+		final TestThrift tt = new TestThrift("abcd", r.nextInt(), r.nextLong(), r.nextBoolean(), (byte)r.nextInt(),
+				(short)r.nextInt(), r.nextDouble(), generateString(r, 16), "abc");
+		ExecutorService threadPool = Executors.newFixedThreadPool(concurrentConnections.size());
+		List<Future<?>> futures = new ArrayList<Future<?>>();
+		for(int a=0;a<concurrentConnections.size();a++) {
+			final IndexedDatabaseEngineManager idbmLocal = concurrentConnections.get(a).idbm;
+			Future<?> future = threadPool.submit(new Runnable() {
+				@Override
+				public void run() {
+					try {
+						idbmLocal.register(TestThrift.class);
+					} catch (IOException e1) {
+						throw new RuntimeException(e1);
+					}
+					for(int b=0;b<1000;b++) {
+						TestThrift ttInner = null;
+						synchronized (tt) {
+							ttInner = new TestThrift(tt);
+							ttInner.b = r.nextBoolean();
+							ttInner.i = r.nextInt();
+							ttInner.st = generateString(r, 16);
+						}
+						try {
+							idbmLocal.upsert(ttInner);
+						} catch (IOException e) {
+							throw new RuntimeException(e);
+						}
+					}
+				}
+				
+			});
+			futures.add(future);
+		}
+		threadPool.shutdown();
+		boolean timedOut=true;
+		while(timedOut) {
+			timedOut=false;
+			for(Future<?> future : futures) {
+				try {
+					if(future.get(1, TimeUnit.SECONDS) != null) {
+						Assert.fail("FUTURE FAILED");
+					}
+				} catch(TimeoutException e) {
+					timedOut = true;
+				}
+			}
+		}
+		TestThrift tt2 = idbm.get(tt.getClass(), tt.id);
+		Assert.assertEquals(1, idbm.secondaryGet(tt2.getClass(), "id", tt2.id).size());
+		Assert.assertEquals(1, idbm.secondaryGet(tt2.getClass(), "b", tt2.b).size());
+		Assert.assertEquals(1, idbm.secondaryGet(tt2.getClass(), "i", tt2.i).size());
+		Assert.assertEquals(1, idbm.secondaryGet(tt2.getClass(), "st", tt2.st).size());
 	}
 }

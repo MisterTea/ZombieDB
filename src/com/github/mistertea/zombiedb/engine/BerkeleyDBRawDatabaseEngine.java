@@ -21,7 +21,7 @@ import com.sleepycat.je.LockMode;
 import com.sleepycat.je.OperationStatus;
 import com.sleepycat.je.Transaction;
 
-public class BerkeleyDBRawDatabaseEngine extends DatabaseEngine {
+public class BerkeleyDBRawDatabaseEngine extends SingleLockDatabaseEngine {
     private Environment myEnv;
 
     // The databases that our application uses
@@ -95,7 +95,8 @@ public class BerkeleyDBRawDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public synchronized void commit() {
+	public synchronized boolean commit() {
+		return true;
 	}
 	
 	@Override
@@ -104,12 +105,12 @@ public class BerkeleyDBRawDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public synchronized boolean deleteKey(String className, String keyString) throws IOException {
+	public synchronized void deleteKey(String className, String keyString) throws IOException {
 		Database db = getOrCreateDb(className);
         DatabaseEntry key;
 		try {
 			key = new DatabaseEntry(keyString.getBytes("UTF-8"));
-			return db.delete(null, key) == OperationStatus.SUCCESS;
+			db.delete(null, key);
 		} catch (UnsupportedEncodingException e) {
 			throw new IOException(e);
 		}
@@ -161,7 +162,7 @@ public class BerkeleyDBRawDatabaseEngine extends DatabaseEngine {
 		return value.getData();
 	}
 
-	private Database getOrCreateDb(String className) {
+	private synchronized Database getOrCreateDb(String className) {
 		Database dbMap = classDbMaps.get(className);
 		if(dbMap == null) {
 	        classDbMaps.put(className,myEnv.openDatabase(null,className,myDbConfig));
@@ -197,7 +198,7 @@ public class BerkeleyDBRawDatabaseEngine extends DatabaseEngine {
 	}
 
 	@Override
-	public synchronized void putBytes(String className, String keyString, byte[] valueBytes) {
+	public synchronized void putBytesBatch(String className, String keyString, byte[] valueBytes) {
 		Database db = getOrCreateDb(className);
 
         DatabaseEntry key;
@@ -211,6 +212,11 @@ public class BerkeleyDBRawDatabaseEngine extends DatabaseEngine {
 		db.put(null, key, value);
 	}
 
+	@Override
+	public synchronized void putBytesAtomic(String className, String keyString, byte[] valueBytes) {
+		putBytesBatch(className, keyString, valueBytes);
+	}
+	
 	@Override
 	public void wipeDatabase() throws IOException {
     	File baseDir = new File(baseDbDirectory + File.pathSeparator + dbName);

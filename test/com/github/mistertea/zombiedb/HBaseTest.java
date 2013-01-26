@@ -2,7 +2,6 @@ package com.github.mistertea.zombiedb;
 
 import java.io.IOException;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
 
@@ -15,9 +14,12 @@ public class HBaseTest extends DatabaseTestBase {
 		db = new HBaseDatabaseEngine("Test", true);
 		dbm = new DatabaseEngineManager(db);
 		idbm = new IndexedDatabaseEngineManager(db);
-	}
-	
-	@After public void shutDown() throws Exception {
-		db.destroy();
+		concurrentConnections.add(new DatabaseConnection(db,dbm,idbm));
+		for(int a=0;a<7;a++) {
+			HBaseDatabaseEngine dbLocal = new HBaseDatabaseEngine("Test", false);
+			DatabaseEngineManager dbmLocal = new DatabaseEngineManager(dbLocal);
+			IndexedDatabaseEngineManager idbmLocal = new IndexedDatabaseEngineManager(dbLocal);
+			concurrentConnections.add(new DatabaseConnection(dbLocal,dbmLocal,idbmLocal));
+		}
 	}
 }
