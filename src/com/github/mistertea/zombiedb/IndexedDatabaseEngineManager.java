@@ -139,7 +139,7 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 
 	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> Set<String> getAllKeys(Class<T> in) throws IOException {
 		createMetadataIfNeeded(in);
-		final KeyNames thriftMetaData = metadata.get(in);
+		final KeyNames thriftMetaData = metadata.get(in.getSimpleName());
 		return databaseEngine.getAllIds(in.getSimpleName() + "_" + thriftMetaData.primary.getFieldName());
 	}
 	
