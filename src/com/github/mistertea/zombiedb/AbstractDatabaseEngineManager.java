@@ -56,7 +56,15 @@ public abstract class AbstractDatabaseEngineManager {
 	 * @throws IOException Signals that an I/O exception has occurred.
 	 */
 	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void clear(Class<T> in) throws IOException {
-		databaseEngine.clear(in.getSimpleName());
+		while(true) {
+			Set<String> keys = getAllKeys(in);
+			if(keys.isEmpty()) {
+				return;
+			}
+			for(String key : keys) {
+				deleteFromId(in, key);
+			}
+		}
 	}
 	
 	/**
@@ -215,9 +223,7 @@ public abstract class AbstractDatabaseEngineManager {
 	 * @return the keys
 	 * @throws IOException Signals that an I/O exception has occurred.
 	 */
-	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> Set<String> getAllKeys(Class<T> in) throws IOException {
-		return databaseEngine.getAllIds(in.getSimpleName());
-	}
+	public abstract <F extends TFieldIdEnum, T extends TBase<?, F>> Set<String> getAllKeys(Class<T> in) throws IOException;
 
 	/**
 	 * Gets the all rows for a particular type as a map of id -> object.
@@ -227,13 +233,11 @@ public abstract class AbstractDatabaseEngineManager {
 	 * @throws IOException Signals that an I/O exception has occurred.
 	 */
 	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> Map<String, T> getAllRows(Class<T> in) throws IOException {
-		Iterator<T> it = new ThriftWrapperIterator<F,T>(in, deserializer,
-				databaseEngine.getValueIterator(in.getSimpleName()));
+		Set<String> keys = getAllKeys(in);
 		Map<String, T> out = new HashMap<String, T>();
-		while(it.hasNext()) {
-			T t = it.next();
-			String id = (String)t.getFieldValue(t.fieldForId(1));
-			out.put(id, t);
+		for(String key : keys) {
+			T value = get(in, key);
+			out.put(key, value);
 		}
 		return out;
 	}

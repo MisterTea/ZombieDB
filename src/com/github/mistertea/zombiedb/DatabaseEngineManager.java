@@ -1,6 +1,7 @@
 package com.github.mistertea.zombiedb;
 
 import java.io.IOException;
+import java.util.Set;
 import java.util.logging.Logger;
 
 import org.apache.thrift.TBase;
@@ -40,6 +41,10 @@ public class DatabaseEngineManager extends AbstractDatabaseEngineManager {
 		databaseEngine.deleteKey(thrift.getClass().getSimpleName(), id);
 	}
 	
+	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> Set<String> getAllKeys(Class<T> in) throws IOException {
+		return databaseEngine.getAllIds(in.getSimpleName());
+	}
+
 	/**
 	 * @see com.github.mistertea.zombiedb.AbstractDatabaseEngineManager#get(java.lang.Class, java.lang.String)
 	 */

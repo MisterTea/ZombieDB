@@ -15,8 +15,6 @@ import org.apache.thrift.TFieldIdEnum;
 import org.apache.thrift.meta_data.FieldMetaData;
 
 import com.github.mistertea.zombiedb.engine.DatabaseEngine;
-import com.github.mistertea.zombiedb.thrift.TestThrift;
-import com.sleepycat.je.rep.LockPreemptedException;
 
 /**
  * The Class IndexedDatabaseEngineManager supports both primary keys adn
@@ -93,7 +91,7 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 		}
 
 		Map<? extends TFieldIdEnum, FieldMetaData> thriftMetadata = org.apache.thrift.meta_data.FieldMetaData
-				.getStructMetaDataMap(TestThrift.class);
+				.getStructMetaDataMap(thrift.getClass());
 		TFieldIdEnum primary = thrift.fieldForId(1);
 		TreeSet<TFieldIdEnum> secondaries = new TreeSet<TFieldIdEnum>();
 		for (int a = 2; a <= 16; a++) {
@@ -139,6 +137,12 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 		}
 	}
 
+	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> Set<String> getAllKeys(Class<T> in) throws IOException {
+		createMetadataIfNeeded(in);
+		final KeyNames thriftMetaData = metadata.get(in);
+		return databaseEngine.getAllIds(in.getSimpleName() + "_" + thriftMetaData.primary.getFieldName());
+	}
+	
 	protected <F extends TFieldIdEnum, T extends TBase<?, F>> void deleteNoPrimaryLock(
 			T staleThrift) throws IOException {
 		String id = (String) staleThrift.getFieldValue(staleThrift
