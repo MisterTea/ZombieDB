@@ -23,7 +23,8 @@ import com.github.mistertea.zombiedb.engine.DatabaseEngine;
  * boolean).
  */
 public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager {
-	private final static Logger logger = Logger.getLogger(IndexedDatabaseEngineManager.class.getName());
+	private final static Logger logger = Logger
+			.getLogger(IndexedDatabaseEngineManager.class.getName());
 
 	private class KeyNames {
 
@@ -137,12 +138,14 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 		}
 	}
 
-	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> Set<String> getAllKeys(Class<T> in) throws IOException {
+	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> Set<String> getAllKeys(
+			Class<T> in) throws IOException {
 		createMetadataIfNeeded(in);
 		final KeyNames thriftMetaData = metadata.get(in.getSimpleName());
-		return databaseEngine.getAllIds(in.getSimpleName() + "_" + thriftMetaData.primary.getFieldName());
+		return databaseEngine.getAllIds(in.getSimpleName() + "_"
+				+ thriftMetaData.primary.getFieldName());
 	}
-	
+
 	protected <F extends TFieldIdEnum, T extends TBase<?, F>> void deleteNoPrimaryLock(
 			T staleThrift) throws IOException {
 		String id = (String) staleThrift.getFieldValue(staleThrift
@@ -155,18 +158,16 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 			for (TFieldIdEnum abstractField : thriftMetaData.secondaries) {
 				// Secondary key(s)
 				F field = (F) abstractField;
-				if (staleThrift.isSet(field)
-						&& staleThrift.getFieldValue(field) != null) {
+				if (staleThrift.getFieldValue(field) != null) {
 					String family = className + "_" + field.getFieldName();
-					String key = staleThrift.getFieldValue(field)
-							.toString();
-					byte[] currentList = databaseEngine.getBytes(family,
-							key);
+					String key = staleThrift.getFieldValue(field).toString();
+					byte[] currentList = databaseEngine.getBytes(family, key);
 
 					if (currentList == null || currentList.length == 0) {
 						throw new IOException(
 								"Tried to delete an object in an inconsistent state: "
-										+ family + " : " + key + " : " + currentList);
+										+ family + " : " + key + " : "
+										+ currentList);
 					}
 
 					String original = new String(currentList, "ISO-8859-1");
@@ -190,21 +191,20 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 					}
 				}
 			}
-			
+
 			{
 				// Primary key
 				F field = (F) thriftMetaData.primary;
-				if (staleThrift.isSet(field)
-						&& staleThrift.getFieldValue(field) != null) {
+				if (staleThrift.getFieldValue(field) != null) {
 					databaseEngine.deleteKey(
-							className + "_" + field.getFieldName(),
-							staleThrift.getFieldValue(field).toString());
+							className + "_" + field.getFieldName(), staleThrift
+									.getFieldValue(field).toString());
 				} else {
 					throw new IOException("Missing primary key on record: "
 							+ staleThrift);
 				}
 			}
-			
+
 			databaseEngine.commit();
 
 		} finally {
@@ -349,9 +349,10 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 		}
 		databaseEngine.commit();
 	}
-	
+
 	@Override
-	protected <F extends TFieldIdEnum, T extends TBase<?, F>> void upsertNoPrimaryLock(T staleThrift, T thrift) throws IOException {
+	protected <F extends TFieldIdEnum, T extends TBase<?, F>> void upsertNoPrimaryLock(
+			T staleThrift, T thrift) throws IOException {
 		String id = (String) thrift.getFieldValue(thrift.fieldForId(1));
 		if (staleThrift != null) {
 			deleteNoPrimaryLock(staleThrift);
@@ -365,28 +366,24 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 			{
 				// Primary key
 				F field = (F) thriftMetaData.primary;
-				if (thrift.isSet(field)
-						&& thrift.getFieldValue(field) != null) {
-					databaseEngine.putBytesBatch(className + "_"
-							+ field.getFieldName(), thrift
-							.getFieldValue(field).toString(),
+				if (thrift.getFieldValue(field) != null) {
+					databaseEngine.putBytesBatch(
+							className + "_" + field.getFieldName(), thrift
+									.getFieldValue(field).toString(),
 							serializer.serialize(thrift));
 				} else {
-					throw new IOException(
-							"Missing primary key on record: " + thrift);
+					throw new IOException("Missing primary key on record: "
+							+ thrift);
 				}
 			}
 
 			for (TFieldIdEnum abstractField : thriftMetaData.secondaries) {
 				// Secondary key(s)
 				F field = (F) abstractField;
-				if (thrift.isSet(field)
-						&& thrift.getFieldValue(field) != null) {
-					String family = className + "_"
-							+ field.getFieldName();
+				if (thrift.getFieldValue(field) != null) {
+					String family = className + "_" + field.getFieldName();
 					String key = thrift.getFieldValue(field).toString();
-					byte[] currentList = databaseEngine.getBytes(
-							family, key);
+					byte[] currentList = databaseEngine.getBytes(family, key);
 					if (currentList == null || currentList.length == 0) {
 						// Was empty, create
 						String s = new String("^" + id + "^");
@@ -446,7 +443,7 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 		for (TFieldIdEnum abstractField : thriftMetaData.secondaries) {
 			// Secondary key(s)
 			F field = (F) abstractField;
-			if (thrift.isSet(field) && thrift.getFieldValue(field) != null) {
+			if (thrift.getFieldValue(field) != null) {
 				String family = className + "_" + field.getFieldName();
 				String key = thrift.getFieldValue(field).toString();
 				databaseEngine.acquireLock(family, key);
@@ -464,7 +461,7 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 		for (TFieldIdEnum abstractField : thriftMetaData.secondaries) {
 			// Secondary key(s)
 			F field = (F) abstractField;
-			if (thrift.isSet(field) && thrift.getFieldValue(field) != null) {
+			if (thrift.getFieldValue(field) != null) {
 				String family = className + "_" + field.getFieldName();
 				String key = thrift.getFieldValue(field).toString();
 				databaseEngine.releaseLock(family, key);
@@ -473,7 +470,8 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 	}
 
 	@SuppressWarnings("unchecked")
-	public <F extends TFieldIdEnum, T extends TBase<?, F>> void register(Class<T> thriftClass) throws IOException {
+	public <F extends TFieldIdEnum, T extends TBase<?, F>> void register(
+			Class<T> thriftClass) throws IOException {
 		createMetadataIfNeeded(thriftClass);
 		getAndLockPrimaryKey(thriftClass, "null");
 		releasePrimaryKeyLock(thriftClass, "null");
@@ -488,7 +486,7 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 			databaseEngine.acquireLock(family, "null");
 			databaseEngine.releaseLock(family, "null");
 		}
-		
+
 		logger.info("Registered " + thriftClass.getSimpleName());
 	}
 }
