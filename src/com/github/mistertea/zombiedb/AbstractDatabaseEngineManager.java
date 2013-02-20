@@ -89,7 +89,7 @@ public abstract class AbstractDatabaseEngineManager {
 	@SuppressWarnings("unchecked")
 	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void create(T thrift) throws IOException {
 		String prevKey = (String)thrift.getFieldValue(thrift.fieldForId(1));
-		if(prevKey != null) {
+		if(prevKey != null && prevKey.length()>0) {
 			throw new IOException("Tried to autogenerate a key for an object that already had a key");
 		}
 		
@@ -237,7 +237,9 @@ public abstract class AbstractDatabaseEngineManager {
 		Map<String, T> out = new HashMap<String, T>();
 		for(String key : keys) {
 			T value = get(in, key);
-			out.put(key, value);
+			if (value != null) {
+				out.put(key, value);
+			}
 		}
 		return out;
 	}

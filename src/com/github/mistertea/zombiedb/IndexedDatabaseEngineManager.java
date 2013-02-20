@@ -164,18 +164,17 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 					byte[] currentList = databaseEngine.getBytes(family, key);
 
 					if (currentList == null || currentList.length == 0) {
-						throw new IOException(
-								"Tried to delete an object in an inconsistent state: "
-										+ family + " : " + key + " : "
-										+ currentList);
+						logger.severe("Tried to delete an object in an inconsistent state: "
+								+ family + " : " + key + " : " + currentList);
+						continue;
 					}
 
 					String original = new String(currentList, "ISO-8859-1");
 					String s = original.replace(id + "^", "");
 					if (s.equals(original)) {
-						throw new IOException(
-								"Tried to delete an object in an inconsistent state: "
-										+ currentList);
+						logger.severe("Tried to delete an object in an inconsistent state: "
+								+ family + " : " + key + " : " + currentList);
+						continue;
 					}
 
 					if (s.length() == 1) {

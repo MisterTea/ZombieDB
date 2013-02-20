@@ -208,6 +208,12 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
 		optsMap.put("replication_factor","1");
 		try {
 			cluster.addKeyspace(cluster.makeKeyspaceDefinition().setName(dbName).setStrategyClass("SimpleStrategy").setStrategyOptions(optsMap));
+		} catch (BadRequestException ire) {
+			if (ire.getMessage().contains("unique")) {
+				// This is ok, some other thread created the keyspace already
+			} else {
+				throw new IOException(ire);
+			}
 		} catch (ConnectionException e) {
 			throw new IOException(e);
 		}
@@ -239,8 +245,6 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
 		try {
 			result = keySpace.prepareQuery(getOrCreateColumnFamily(family))
 			.getAllRows()
-			.setRowLimit(10)
-			.withColumnRange(new RangeBuilder().setLimit(10).build())
 			.setExceptionCallback(new ExceptionCallback() {
 				@Override
 				public boolean onException(ConnectionException e) {
@@ -377,7 +381,7 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
 				new ColumnPrefixDistributedRowLock<String>(keySpace, getOrCreateColumnFamily(className), key)
 				.withBackoff(new BoundedExponentialBackoff(250, 60000, 20))
 				.withConsistencyLevel(ConsistencyLevel.CL_ALL)
-				.expireLockAfter(600, TimeUnit.SECONDS);
+				.expireLockAfter(10, TimeUnit.SECONDS);
 
 		try {
 			lock.acquire();
