@@ -21,6 +21,7 @@ import com.netflix.astyanax.connectionpool.OperationResult;
 import com.netflix.astyanax.connectionpool.exceptions.BadRequestException;
 import com.netflix.astyanax.connectionpool.exceptions.ConnectionException;
 import com.netflix.astyanax.connectionpool.impl.ConnectionPoolConfigurationImpl;
+import com.netflix.astyanax.connectionpool.impl.FixedRetryBackoffStrategy;
 import com.netflix.astyanax.connectionpool.impl.Slf4jConnectionPoolMonitorImpl;
 import com.netflix.astyanax.ddl.ColumnFamilyDefinition;
 import com.netflix.astyanax.impl.AstyanaxConfigurationImpl;
@@ -130,7 +131,7 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
 		.forKeyspace(dbName)
 		.withAstyanaxConfiguration(new AstyanaxConfigurationImpl().setDefaultWriteConsistencyLevel(ConsistencyLevel.CL_ALL).setDefaultReadConsistencyLevel(ConsistencyLevel.CL_ALL)
 		.setDiscoveryType(NodeDiscoveryType.NONE)
-		.setRetryPolicy(new BoundedExponentialBackoff(250, 5000, 100))
+		.setRetryPolicy(new BoundedExponentialBackoff(250, 5000, 10))
 				)
 				.withConnectionPoolConfiguration(new ConnectionPoolConfigurationImpl("MyConnectionPool")
 				.setPort(9160)
@@ -138,6 +139,7 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
 				.setSeeds("127.0.0.1:9160")
 				.setSocketTimeout(60000)
 				.setConnectTimeout(60000)
+				.setRetryBackoffStrategy(new FixedRetryBackoffStrategy(1000, 1000))
 						)
 						.withConnectionPoolMonitor(new Slf4jConnectionPoolMonitorImpl())
 						.buildCluster(ThriftFamilyFactory.getInstance());
@@ -380,7 +382,7 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
 	public synchronized void acquireLock(String className, String key) throws IOException {
 		ColumnPrefixDistributedRowLock<String> lock = 
 				new ColumnPrefixDistributedRowLock<String>(keySpace, getOrCreateColumnFamily(className), key)
-				.withBackoff(new BoundedExponentialBackoff(250, 60000, 20))
+				.withBackoff(new BoundedExponentialBackoff(250, 5000, 10))
 				.withConsistencyLevel(ConsistencyLevel.CL_ALL)
 				.expireLockAfter(10, TimeUnit.SECONDS);
 
