@@ -134,9 +134,10 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
 				)
 				.withConnectionPoolConfiguration(new ConnectionPoolConfigurationImpl("MyConnectionPool")
 				.setPort(9160)
-				.setMaxConnsPerHost(1)
+				.setMaxConnsPerHost(16)
 				.setSeeds("127.0.0.1:9160")
-				.setSocketTimeout(10000000)
+				.setSocketTimeout(60000)
+				.setConnectTimeout(60000)
 						)
 						.withConnectionPoolMonitor(new Slf4jConnectionPoolMonitorImpl())
 						.buildCluster(ThriftFamilyFactory.getInstance());

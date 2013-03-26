@@ -129,9 +129,8 @@ public class DatabaseEngineManager extends AbstractDatabaseEngineManager {
 		databaseEngine.releaseLock(in.getSimpleName(), id);
 	}
 
-	@SuppressWarnings("unchecked")
 	@Override
-	public <F extends TFieldIdEnum, T extends TBase<?, F>> void register(
+	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void register(
 			Class<T> thriftClass) throws IOException {
 		get(thriftClass, "null");
 		logger.info("Registered " + thriftClass.getSimpleName());

@@ -117,7 +117,7 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 	 */
 	@SuppressWarnings("unchecked")
 	@Override
-	public <F extends TFieldIdEnum, T extends TBase<?, F>> void delete(
+	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void delete(
 			T inMemoryThrift) throws IOException {
 		if (inMemoryThrift == null) {
 			return;
@@ -146,6 +146,7 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 				+ thriftMetaData.primary.getFieldName());
 	}
 
+	@SuppressWarnings("unchecked")
 	protected <F extends TFieldIdEnum, T extends TBase<?, F>> void deleteNoPrimaryLock(
 			T staleThrift) throws IOException {
 		String id = (String) staleThrift.getFieldValue(staleThrift
@@ -246,7 +247,7 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 	 * @see com.github.mistertea.zombiedb.AbstractDatabaseEngineManager#getValueIterator(java.lang.Class)
 	 */
 	@Override
-	public <F extends TFieldIdEnum, T extends TBase<?, F>> ThriftWrapperIterator<F, T> getValueIterator(
+	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> ThriftWrapperIterator<F, T> getValueIterator(
 			Class<T> in) throws IOException {
 		return new ThriftWrapperIterator<F, T>(in, deserializer,
 				databaseEngine.getValueIterator(in.getSimpleName() + "_id"));
@@ -312,7 +313,7 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 	 * @see com.github.mistertea.zombiedb.AbstractDatabaseEngineManager#size(java.lang.Class)
 	 */
 	@Override
-	public <F extends TFieldIdEnum, T extends TBase<?, F>> int size(Class<T> in)
+	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> int size(Class<T> in)
 			throws IOException {
 		return databaseEngine.numValues(in.getSimpleName() + "_id");
 	}
@@ -329,7 +330,7 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public <F extends TFieldIdEnum, T extends TBase<?, F>> void upsert(T thrift)
+	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void upsert(T thrift)
 			throws IOException {
 		createMetadataIfNeeded(thrift);
 		try {
@@ -349,6 +350,7 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 		databaseEngine.commit();
 	}
 
+	@SuppressWarnings("unchecked")
 	@Override
 	protected <F extends TFieldIdEnum, T extends TBase<?, F>> void upsertNoPrimaryLock(
 			T staleThrift, T thrift) throws IOException {
@@ -469,7 +471,7 @@ public class IndexedDatabaseEngineManager extends AbstractDatabaseEngineManager 
 	}
 
 	@SuppressWarnings("unchecked")
-	public <F extends TFieldIdEnum, T extends TBase<?, F>> void register(
+	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void register(
 			Class<T> thriftClass) throws IOException {
 		createMetadataIfNeeded(thriftClass);
 		getAndLockPrimaryKey(thriftClass, "null");
