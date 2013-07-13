@@ -56,7 +56,7 @@ public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 			if (noCache) {
 				dbMaker.cacheDisable();
 			} else {
-				dbMaker.cacheSoftRefEnable();
+				//dbMaker.cacheSoftRefEnable();
 			}
 		}
 		dbMaker.closeOnJvmShutdown();
