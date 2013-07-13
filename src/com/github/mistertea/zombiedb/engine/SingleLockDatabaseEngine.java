@@ -1,10 +1,11 @@
 package com.github.mistertea.zombiedb.engine;
 
 import java.io.IOException;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.HashSet;
+import java.util.Set;
 
 public abstract class SingleLockDatabaseEngine implements DatabaseEngine {
-	ConcurrentSkipListSet<String> locks = new ConcurrentSkipListSet<String>();
+	Set<String> locks = new HashSet<String>();
 
 	@Override
 	public void acquireLock(String family, String key) throws IOException {
@@ -23,7 +24,8 @@ public abstract class SingleLockDatabaseEngine implements DatabaseEngine {
 	}
 
 	@Override
-	public void releaseLock(String family, String key) throws IOException {
+	public synchronized void releaseLock(String family, String key)
+			throws IOException {
 		locks.remove(family+":"+key);
 	}
 }

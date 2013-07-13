@@ -45,23 +45,24 @@ public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 			createDatabase();
 		}
 	}
-	
+
 	private void createDatabase() {
 		new File(dbDirectory).mkdirs();
 		DBMaker dbMaker = null;
 		if (inMemory) {
-			dbMaker = DBMaker.newDirectMemoryDB().cacheDisable();
+			dbMaker = DBMaker.newDirectMemoryDB();
 		} else {
 			dbMaker = DBMaker.newFileDB(new File(dbFileName));
 			if (noCache) {
 				dbMaker.cacheDisable();
 			} else {
-				//dbMaker.cacheSoftRefEnable();
+				// dbMaker.cacheSoftRefEnable();
 			}
 		}
 		dbMaker.closeOnJvmShutdown();
 		if (!transactional) {
-			dbMaker.syncOnCommitDisable();
+			dbMaker.syncOnCommitDisable().asyncWriteDisable()
+					.writeAheadLogDisable();
 		}
 		database = dbMaker.make();
 	}
@@ -73,7 +74,9 @@ public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 
 	@Override
 	public boolean commit() {
-		database.commit();
+		if (transactional) {
+			database.commit();
+		}
 		return true;
 	}
 
@@ -150,6 +153,7 @@ public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 		System.out.println("WIPING OLD DATABASE");
 		if (database != null) {
 			database.close();
+			classDbMaps.clear();
 		}
 		if (!inMemory) {
 			// Wipe the old database
