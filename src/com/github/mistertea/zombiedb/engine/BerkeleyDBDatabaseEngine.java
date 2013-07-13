@@ -7,7 +7,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.sleepycat.bind.ByteArrayBinding;
 import com.sleepycat.bind.serial.StoredClassCatalog;
@@ -28,7 +30,7 @@ public class BerkeleyDBDatabaseEngine extends SingleLockDatabaseEngine {
 			this.map = map;
 		}
 	}
-	private final static Logger logger = Logger.getLogger(BerkeleyDBDatabaseEngine.class.getName());
+	final Logger logger = LoggerFactory.getLogger(AstyanaxDatabaseEngine.class);
 
     private Environment myEnv;
 

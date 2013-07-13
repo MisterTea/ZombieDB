@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
@@ -30,6 +29,8 @@ import org.apache.hadoop.hbase.client.RetriesExhaustedException;
 import org.apache.hadoop.hbase.client.Row;
 import org.apache.hadoop.hbase.client.RowLock;
 import org.apache.hadoop.hbase.client.Scan;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class HBaseDatabaseEngine implements DatabaseEngine {
 	class HBaseIteratorWrapper implements Iterator<byte[]> {
@@ -57,7 +58,7 @@ public class HBaseDatabaseEngine implements DatabaseEngine {
 		}
 		
 	}
-	private final static Logger logger = Logger.getLogger(HBaseDatabaseEngine.class.getName());
+	final Logger logger = LoggerFactory.getLogger(HBaseDatabaseEngine.class);
 	private Configuration configuration;
 	private HBaseAdmin admin;
 	private String clusterName;
@@ -73,7 +74,7 @@ public class HBaseDatabaseEngine implements DatabaseEngine {
 		
 		this.clusterName = clusterName;
 		
-		logger.fine("Creating HBase Engine");
+		logger.debug("Creating HBase Engine");
 		configuration = HBaseConfiguration.create();
 	    configuration.clear();
 
@@ -138,7 +139,7 @@ public class HBaseDatabaseEngine implements DatabaseEngine {
 		
 		// Wait for the table to become enabled
 		for(int a=0;!admin.isTableEnabled(clusterName) && a<100;a++) {
-			logger.fine("Waiting for table to become enabled...");
+			logger.debug("Waiting for table to become enabled...");
 			try {
 				Thread.sleep(1000);
 			} catch (InterruptedException e) {
@@ -149,7 +150,7 @@ public class HBaseDatabaseEngine implements DatabaseEngine {
 		
 		if(!table.getTableDescriptor().hasFamily(family.getBytes("ISO-8859-1"))) {
 			boolean done = false;
-			logger.fine("ADDING FAMILY: " + family);
+			logger.debug("ADDING FAMILY: " + family);
 			while(true) {
 				try {
 					admin.disableTable(clusterName);
@@ -203,7 +204,7 @@ public class HBaseDatabaseEngine implements DatabaseEngine {
 		}
 		delete.deleteColumns(family.getBytes("ISO-8859-1"), qualifier);
 		table.delete(delete);
-		logger.fine("DELETING: " + family + " : " + key);
+		logger.debug("DELETING: " + family + " : " + key);
 	}
 
 	@Override
@@ -314,7 +315,7 @@ public class HBaseDatabaseEngine implements DatabaseEngine {
 					} catch (InterruptedException e) {
 						throw new IOException(e);
 					}
-					logger.warning("Retries exhausted while locking row " + key);
+					logger.warn("Retries exhausted while locking row " + key);
 				} catch (IOException e) {
 					throw new IOException(e);
 				}
@@ -327,9 +328,9 @@ public class HBaseDatabaseEngine implements DatabaseEngine {
 		createColumnFamilyIfNecessary(family);
 		HBaseLock lock = locks.get(key);
 		if(lock == null) {
-			logger.fine(String.valueOf(Thread.currentThread().getId()) + " GETTING LOCK " + family + " : " + key);
+			logger.debug(String.valueOf(Thread.currentThread().getId()) + " GETTING LOCK " + family + " : " + key);
 			lock = new HBaseLock(key);
-			logger.fine(String.valueOf(Thread.currentThread().getId()) + " GOT LOCK " + family + " : " + key);
+			logger.debug(String.valueOf(Thread.currentThread().getId()) + " GOT LOCK " + family + " : " + key);
 		}
 		lock.families.add(family);
 		locks.put(key, lock);
@@ -346,12 +347,12 @@ public class HBaseDatabaseEngine implements DatabaseEngine {
 		lock.families.remove(family);
 		if (lock.families.isEmpty()) {
 			try {
-				logger.fine(String.valueOf(Thread.currentThread().getId()) + " RELEASING LOCK " + family + " : " + key);
+				logger.debug(String.valueOf(Thread.currentThread().getId()) + " RELEASING LOCK " + family + " : " + key);
 				table.unlockRow(lock.lock);
-				logger.fine(String.valueOf(Thread.currentThread().getId()) + " RELEASED LOCK " + family + " : " + key);
+				logger.debug(String.valueOf(Thread.currentThread().getId()) + " RELEASED LOCK " + family + " : " + key);
 			} catch(UnknownRowLockException urle) {
 				// This is ok, it means we deleted the row and so the lock cannot be found.
-				logger.log(Level.INFO, "Could not find row lock: " + key, urle);
+				logger.info("Could not find row lock: " + key, urle);
 			}
 			locks.remove(key);
 		}

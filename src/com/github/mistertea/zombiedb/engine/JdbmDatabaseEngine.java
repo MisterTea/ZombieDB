@@ -9,46 +9,59 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Logger;
 
-import org.apache.jdbm.DB;
-import org.apache.jdbm.DBMaker;
-
+import org.mapdb.DB;
+import org.mapdb.DBMaker;
 
 public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
-	private final static Logger logger = Logger.getLogger(JdbmDatabaseEngine.class.getName());
+	private final static Logger logger = Logger
+			.getLogger(JdbmDatabaseEngine.class.getName());
 
-	ConcurrentMap<String, ConcurrentMap<String,byte[]>> classDbMaps = new ConcurrentHashMap<String, ConcurrentMap<String,byte[]>>();
+	ConcurrentMap<String, ConcurrentMap<String, byte[]>> classDbMaps = new ConcurrentHashMap<String, ConcurrentMap<String, byte[]>>();
 	private String dbDirectory;
 	private String dbFileName;
 
 	private boolean inMemory;
+	private boolean transactional;
+	private boolean noCache;
+
 	public DB database;
 
-	public JdbmDatabaseEngine(String baseDbDirectory, String dbName, boolean wipe, boolean transactional, boolean inMemory, boolean noCache) throws IOException {
+	public JdbmDatabaseEngine(String baseDbDirectory, String dbName,
+			boolean wipe, boolean transactional, boolean inMemory,
+			boolean noCache) throws IOException {
 		super();
 		this.inMemory = inMemory;
+		this.transactional = transactional;
+		this.noCache = noCache;
 		logger.info("CREATING NEW DATABASE ENGINE");
-		/** create (or open existing) database using builder pattern*/
+		/** create (or open existing) database using builder pattern */
 		dbDirectory = baseDbDirectory + "/" + dbName;
 		dbFileName = dbDirectory + "/" + "db";
 		System.out.println(" db dir: " + dbDirectory + " db file" + dbFileName);
 		if (wipe) {
 			wipeDatabase();
+			// Wipe calls createDatabase()
+		} else {
+			createDatabase();
 		}
+	}
+	
+	private void createDatabase() {
 		new File(dbDirectory).mkdirs();
 		DBMaker dbMaker = null;
-		if(inMemory) {
-			dbMaker = DBMaker.openMemory().disableCache();
+		if (inMemory) {
+			dbMaker = DBMaker.newDirectMemoryDB().cacheDisable();
 		} else {
-			dbMaker = DBMaker.openFile(dbFileName);
-			if(noCache) {
-				dbMaker.disableCache();
+			dbMaker = DBMaker.newFileDB(new File(dbFileName));
+			if (noCache) {
+				dbMaker.cacheDisable();
 			} else {
-				dbMaker.enableSoftCache();
+				dbMaker.cacheSoftRefEnable();
 			}
 		}
-		dbMaker.closeOnExit();
-		if(!transactional) {
-			dbMaker.disableTransactions();
+		dbMaker.closeOnJvmShutdown();
+		if (!transactional) {
+			dbMaker.syncOnCommitDisable();
 		}
 		database = dbMaker.make();
 	}
@@ -63,7 +76,7 @@ public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 		database.commit();
 		return true;
 	}
-	
+
 	@Override
 	public boolean containsKey(String className, String s) {
 		return getOrCreateDb(className).containsKey(s);
@@ -76,7 +89,7 @@ public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 
 	@Override
 	public synchronized void destroy() {
-		if(database != null && !database.isClosed())
+		if (database != null && !database.isClosed())
 			database.close();
 		database = null;
 	}
@@ -93,14 +106,14 @@ public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 
 	public ConcurrentMap<String, byte[]> getOrCreateDb(String className) {
 		ConcurrentMap<String, byte[]> dbMap = classDbMaps.get(className);
-		if(dbMap != null) {
+		if (dbMap != null) {
 			return dbMap;
 		}
 		synchronized (this) {
-			if(dbMap == null) {
+			if (dbMap == null) {
 				dbMap = database.getHashMap(className);
 				if (dbMap == null) {
-					dbMap = database.createHashMap(className);
+					dbMap = database.createHashMap(className, true, null, null);
 				}
 			}
 			classDbMaps.put(className, dbMap);
@@ -110,8 +123,8 @@ public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 
 	@Override
 	public Iterator<byte[]> getValueIterator(String family) {
-		Map<String,byte[]> classDbMap = getOrCreateDb(family);
-		
+		Map<String, byte[]> classDbMap = getOrCreateDb(family);
+
 		return classDbMap.values().iterator();
 	}
 
@@ -131,45 +144,43 @@ public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 		putBytesBatch(family, key, value);
 		commit();
 	}
-	
+
 	@Override
 	public synchronized void wipeDatabase() throws IOException {
 		System.out.println("WIPING OLD DATABASE");
-		if(database != null) {
-			for(String s : database.getCollections().keySet()) {
-				System.out.println("DELETING COLLECTION: " + s);
-				database.deleteCollection(s);
-				classDbMaps.remove(s);
-			}
+		if (database != null) {
+			database.close();
 		}
-		if(inMemory) {
-			return;
-		}
-		// Wipe the old database
-		File folder = new File(dbDirectory);
-		File[] listOfFiles = folder.listFiles();
-		if(listOfFiles == null) {
-			if(!new File(dbDirectory).mkdir()) {
-				throw new IOException("Could not make databse directory!");
-			}
-		} else {
+		if (!inMemory) {
+			// Wipe the old database
+			File folder = new File(dbDirectory);
+			File[] listOfFiles = folder.listFiles();
+			if (listOfFiles == null) {
+				if (!new File(dbDirectory).mkdir()) {
+					throw new IOException("Could not make databse directory!");
+				}
+			} else {
 
-			for (int i = 0; i < listOfFiles.length; i++) {
-				if (listOfFiles[i].isFile()) {
-					String dirFilename = listOfFiles[i].getPath();
-					System.out.println(dirFilename);
-					if(!new File(dirFilename).delete()) {
-						throw new IOException("Could not delete file: " + dirFilename);
-					}
-					if(new File(dirFilename).delete()) {
-						throw new IOException("Could not delete file: " + dirFilename);
+				for (int i = 0; i < listOfFiles.length; i++) {
+					if (listOfFiles[i].isFile()) {
+						String dirFilename = listOfFiles[i].getPath();
+						System.out.println(dirFilename);
+						if (!new File(dirFilename).delete()) {
+							throw new IOException("Could not delete file: "
+									+ dirFilename);
+						}
+						if (new File(dirFilename).delete()) {
+							throw new IOException("Could not delete file: "
+									+ dirFilename);
+						}
 					}
 				}
 			}
-		}
 
-		if (new File(dbFileName).delete()) {
-			logger.info("WIPED OLD DATABASE");
+			if (new File(dbFileName).delete()) {
+				logger.info("WIPED OLD DATABASE");
+			}
 		}
+		createDatabase();
 	}
 }

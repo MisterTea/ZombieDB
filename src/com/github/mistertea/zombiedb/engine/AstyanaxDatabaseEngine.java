@@ -7,9 +7,9 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 
-import org.apache.cassandra.thrift.InvalidRequestException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.netflix.astyanax.AstyanaxContext;
 import com.netflix.astyanax.Cluster;
@@ -34,7 +34,6 @@ import com.netflix.astyanax.recipes.locks.ColumnPrefixDistributedRowLock;
 import com.netflix.astyanax.retry.BoundedExponentialBackoff;
 import com.netflix.astyanax.serializers.StringSerializer;
 import com.netflix.astyanax.thrift.ThriftFamilyFactory;
-import com.netflix.astyanax.util.RangeBuilder;
 
 public class AstyanaxDatabaseEngine implements DatabaseEngine {
 	class FamilyRowPair {
@@ -109,7 +108,7 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
 		}
 
 	}
-	private final static Logger logger = Logger.getLogger(AstyanaxDatabaseEngine.class.getName());
+	final Logger logger = LoggerFactory.getLogger(AstyanaxDatabaseEngine.class);
 	private String dbName;
 	private Cluster cluster;
 	private Keyspace keySpace;
@@ -136,6 +135,8 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
 				.withConnectionPoolConfiguration(new ConnectionPoolConfigurationImpl("MyConnectionPool")
 				.setPort(9160)
 				.setMaxConnsPerHost(16)
+				.setMaxConns(16)
+				.setMaxBlockedThreadsPerHost(16)
 				.setSeeds("127.0.0.1:9160")
 				.setSocketTimeout(60000)
 				.setConnectTimeout(60000)
@@ -275,7 +276,7 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
 
 	@Override
 	public synchronized byte[] getBytes(String className, String key) throws IOException {
-		logger.fine("GETTING: " + className + " : " + key);
+		logger.debug("GETTING: " + className + " : " + key);
 		OperationResult<ColumnList<String>> result;
 		try {
 			result = keySpace.prepareQuery(getOrCreateColumnFamily(className))
@@ -290,7 +291,7 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
 			return null;
 		}
 
-		logger.fine("GETTING: " + className + " : " + key + " = " + columns.getColumnByName("Data").getByteArrayValue());
+		logger.debug("GETTING: " + className + " : " + key + " = " + columns.getColumnByName("Data").getByteArrayValue());
 		return columns.getColumnByName("Data").getByteArrayValue();
 	}
 
@@ -394,13 +395,13 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
 			throw new IOException(e);
 		}
 
-		logger.fine("LOCKING: " + className + " : " + key);
+		logger.debug("LOCKING: " + className + " : " + key);
 		locks.put(new FamilyRowPair(className, key), lock);
 	}
 
 	@Override
 	public synchronized void releaseLock(String className, String key) throws IOException {
-		logger.fine("UNLOCKING: " + className + " : " + key);
+		logger.debug("UNLOCKING: " + className + " : " + key);
 		ColumnPrefixDistributedRowLock<String> lock = locks.get(new FamilyRowPair(className, key));
 		if(lock == null) {
 			throw new IOException("Tried to release unknown lock");

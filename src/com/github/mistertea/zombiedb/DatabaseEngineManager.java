@@ -2,11 +2,12 @@ package com.github.mistertea.zombiedb;
 
 import java.io.IOException;
 import java.util.Set;
-import java.util.logging.Logger;
 
 import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
 import org.apache.thrift.TFieldIdEnum;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.github.mistertea.zombiedb.engine.DatabaseEngine;
 
@@ -15,7 +16,7 @@ import com.github.mistertea.zombiedb.engine.DatabaseEngine;
  * if you want secondary keys.
  */
 public class DatabaseEngineManager extends AbstractDatabaseEngineManager {
-	private final static Logger logger = Logger.getLogger(DatabaseEngineManager.class.getName());
+	final Logger logger = LoggerFactory.getLogger(DatabaseEngineManager.class);
 	
 	/**
 	 * Instantiates a new database engine manager.
