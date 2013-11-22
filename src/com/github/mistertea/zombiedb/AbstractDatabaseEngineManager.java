@@ -5,7 +5,6 @@ import java.io.BufferedWriter;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -13,13 +12,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.TreeSet;
 
+import org.apache.commons.lang3.ClassUtils;
 import org.apache.thrift.TBase;
 import org.apache.thrift.TDeserializer;
 import org.apache.thrift.TFieldIdEnum;
 import org.apache.thrift.TSerializer;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TJSONProtocol;
+
+import au.com.bytecode.opencsv.CSVWriter;
 
 import com.github.mistertea.zombiedb.engine.DatabaseEngine;
 
@@ -199,6 +202,67 @@ public abstract class AbstractDatabaseEngineManager {
 	}
 
 	/**
+	 * Exports a CSV containing the top-level items in the object.
+	 * 
+	 * @param in
+	 *            the type to dump
+	 * @param basePath
+	 *            a directory where to put the file. The file name will be in
+	 *            the form (basePath)/(class name).csv
+	 * @throws IOException
+	 *             Signals that an I/O exception has occurred.
+	 */
+	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void exportCsv(
+			Class<T> in, String basePath) throws IOException {
+		String filename = basePath + "/" + in.getSimpleName() + ".csv";
+		T dummy;
+		try {
+			dummy = in.newInstance();
+		} catch (Exception e1) {
+			throw new IOException(e1);
+		}
+		CSVWriter writer = new CSVWriter(new FileWriter(filename));
+		TreeSet<Integer> validTags = new TreeSet<Integer>();
+		List<String> tagNames = new ArrayList<String>();
+		for (int a=0;a<1000000;a++) {
+			if (dummy.fieldForId(a) != null) {
+				validTags.add(a);
+				tagNames.add(dummy.fieldForId(a).getFieldName());
+			}
+		}
+		writer.writeNext(tagNames.toArray(new String[0]));
+		
+		try {
+			ThriftWrapperIterator<F, T> it = getValueIterator(in);
+			List<String> line = new ArrayList<String>();
+			while (it.hasNext()) {
+				try {
+					T t = it.next();
+					line.clear();
+
+					for (int tag : validTags) {
+						Object value = t.getFieldValue(t.fieldForId(tag));
+						if (value == null) {
+							line.add("");
+						}
+						if (ClassUtils.isPrimitiveOrWrapper(value.getClass()) ||
+								value instanceof String) {
+							line.add(value.toString());
+						} else {
+							line.add("");
+						}
+					}
+					writer.writeNext(line.toArray(new String[0]));
+				} catch (Exception e) {
+					throw new IOException(e);
+				}
+			}
+		} finally {
+			writer.close();
+		}
+	}
+	
+	/**
 	 * Dump All objects of a given type to a file.
 	 * 
 	 * @param in
@@ -218,9 +282,9 @@ public abstract class AbstractDatabaseEngineManager {
 			while (it.hasNext()) {
 				try {
 					T t = it.next();
-					String id = (String) t.getFieldValue(t.fieldForId(1));
 
-					writer.write(serializer.toString(t, "ISO-8859-1"));
+					writer.write(jsonSerializer.toString(t, "ISO-8859-1"));
+					writer.write("\n");
 				} catch (Exception e) {
 					throw new IOException(e);
 				}
