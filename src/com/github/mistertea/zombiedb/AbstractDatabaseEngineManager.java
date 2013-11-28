@@ -221,6 +221,7 @@ public abstract class AbstractDatabaseEngineManager {
 	 */
 	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void exportCsv(
 			Class<T> in, File basePath) throws IOException {
+		basePath.mkdirs();
 		File file = new File(basePath, in.getSimpleName() + ".csv.bz2");
 		T dummy;
 		try {
@@ -283,6 +284,7 @@ public abstract class AbstractDatabaseEngineManager {
 	 */
 	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void dump(
 			Class<T> in, File basePath) throws IOException {
+		basePath.mkdirs();
 		File file = new File(basePath, in.getSimpleName() + ".zombiedb.bz2");
 		BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
 				new BZip2CompressorOutputStream(new FileOutputStream(file))));
