@@ -253,8 +253,7 @@ public abstract class AbstractDatabaseEngineManager {
 						Object value = t.getFieldValue(t.fieldForId(tag));
 						if (value == null) {
 							line.add("");
-						}
-						if (ClassUtils.isPrimitiveOrWrapper(value.getClass())
+						} else if (ClassUtils.isPrimitiveOrWrapper(value.getClass())
 								|| value instanceof String) {
 							line.add(value.toString());
 						} else {
