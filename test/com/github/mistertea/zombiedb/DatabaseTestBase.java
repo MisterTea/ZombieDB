@@ -292,16 +292,16 @@ import com.github.mistertea.zombiedb.thrift.TestThrift;
 			dbm.commit();
 		}
 		
-		dbm.dump(TestThrift.class, ".");
+		dbm.dump(TestThrift.class, new File("."));
 		dbm.wipeDatabase();
 
-		dbm.load(TestThrift.class, ".");
+		dbm.load(TestThrift.class, new File("."));
 		for(TestThrift tt : tts) {
 			TestThrift tt2 = dbm.get(TestThrift.class, tt.id);
 			Assert.assertEquals(tt, tt2);
 		}
 
-		new File("TestThrift.sf").delete();
+		new File("TestThrift.zombiedb.bz2").delete();
 	}
 
 	@Test public void testSerializeIndexed() throws Exception {
@@ -316,17 +316,16 @@ import com.github.mistertea.zombiedb.thrift.TestThrift;
 			idbm.commit();
 		}
 		
-		idbm.dump(TestThrift.class, ".");
+		idbm.dump(TestThrift.class, new File("."));
 		idbm.wipeDatabase();
 
-		idbm.load(TestThrift.class, ".");
+		idbm.load(TestThrift.class, new File("."));
 		for(TestThrift tt : tts) {
 			TestThrift tt2 = idbm.get(TestThrift.class, tt.id);
 			Assert.assertEquals(tt, tt2);
 		}
 
-		new File("TestThrift.sf").delete();
-		new File(".TestThrift.sf.crc").delete();
+		new File("TestThrift.zombiedb.bz2").delete();
 	}
 	
 	// ACID tests

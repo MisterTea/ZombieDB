@@ -2,9 +2,14 @@ package com.github.mistertea.zombiedb;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -14,6 +19,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream;
 import org.apache.commons.lang3.ClassUtils;
 import org.apache.thrift.TBase;
 import org.apache.thrift.TDeserializer;
@@ -213,25 +220,26 @@ public abstract class AbstractDatabaseEngineManager {
 	 *             Signals that an I/O exception has occurred.
 	 */
 	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void exportCsv(
-			Class<T> in, String basePath) throws IOException {
-		String filename = basePath + "/" + in.getSimpleName() + ".csv";
+			Class<T> in, File basePath) throws IOException {
+		File file = new File(basePath, in.getSimpleName() + ".csv.bz2");
 		T dummy;
 		try {
 			dummy = in.newInstance();
 		} catch (Exception e1) {
 			throw new IOException(e1);
 		}
-		CSVWriter writer = new CSVWriter(new FileWriter(filename));
+		CSVWriter writer = new CSVWriter(new OutputStreamWriter(
+				new BZip2CompressorOutputStream(new FileOutputStream(file))));
 		TreeSet<Integer> validTags = new TreeSet<Integer>();
 		List<String> tagNames = new ArrayList<String>();
-		for (int a=0;a<1000000;a++) {
+		for (int a = 0; a < 1000000; a++) {
 			if (dummy.fieldForId(a) != null) {
 				validTags.add(a);
 				tagNames.add(dummy.fieldForId(a).getFieldName());
 			}
 		}
 		writer.writeNext(tagNames.toArray(new String[0]));
-		
+
 		try {
 			ThriftWrapperIterator<F, T> it = getValueIterator(in);
 			List<String> line = new ArrayList<String>();
@@ -245,8 +253,8 @@ public abstract class AbstractDatabaseEngineManager {
 						if (value == null) {
 							line.add("");
 						}
-						if (ClassUtils.isPrimitiveOrWrapper(value.getClass()) ||
-								value instanceof String) {
+						if (ClassUtils.isPrimitiveOrWrapper(value.getClass())
+								|| value instanceof String) {
 							line.add(value.toString());
 						} else {
 							line.add("");
@@ -261,7 +269,7 @@ public abstract class AbstractDatabaseEngineManager {
 			writer.close();
 		}
 	}
-	
+
 	/**
 	 * Dump All objects of a given type to a file.
 	 * 
@@ -274,9 +282,10 @@ public abstract class AbstractDatabaseEngineManager {
 	 *             Signals that an I/O exception has occurred.
 	 */
 	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void dump(
-			Class<T> in, String basePath) throws IOException {
-		String filename = basePath + "/" + in.getSimpleName() + ".sf";
-		BufferedWriter writer = new BufferedWriter(new FileWriter(filename));
+			Class<T> in, File basePath) throws IOException {
+		File file = new File(basePath, in.getSimpleName() + ".zombiedb.bz2");
+		BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
+				new BZip2CompressorOutputStream(new FileOutputStream(file))));
 		try {
 			ThriftWrapperIterator<F, T> it = getValueIterator(in);
 			while (it.hasNext()) {
@@ -398,9 +407,10 @@ public abstract class AbstractDatabaseEngineManager {
 	 *             Signals that an I/O exception has occurred.
 	 */
 	public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void load(
-			Class<T> in, String basePath) throws IOException {
-		String filename = basePath + "/" + in.getSimpleName() + ".sf";
-		BufferedReader reader = new BufferedReader(new FileReader(filename));
+			Class<T> in, File basePath) throws IOException {
+		File file = new File(basePath, in.getSimpleName() + ".zombiedb.bz2");
+		BufferedReader reader = new BufferedReader(new InputStreamReader(
+				new BZip2CompressorInputStream(new FileInputStream(file))));
 
 		try {
 			int count = 0;
