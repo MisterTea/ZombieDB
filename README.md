@@ -48,7 +48,7 @@ ZombieDB is in the central maven repository.  To use, add this code to your pom.
     <dependency>
         <groupId>com.github.mistertea</groupId>
         <artifactId>zombiedb</artifactId>
-        <version>LATEST</version>
+        <version>RELEASE</version>
     </dependency>
 
 Comments/Questions
