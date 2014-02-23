@@ -12,6 +12,9 @@ import java.util.logging.Logger;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
 
+import com.github.mistertea.zombiedb.CloseableIterator;
+import com.github.mistertea.zombiedb.EmptyCloseableIteratorWrapper;
+
 public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 	private final static Logger logger = Logger
 			.getLogger(JdbmDatabaseEngine.class.getName());
@@ -125,10 +128,10 @@ public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 	}
 
 	@Override
-	public Iterator<byte[]> getValueIterator(String family) {
+	public CloseableIterator<byte[]> getValueIterator(String family) {
 		Map<String, byte[]> classDbMap = getOrCreateDb(family);
 
-		return classDbMap.values().iterator();
+		return new EmptyCloseableIteratorWrapper<byte[]>(classDbMap.values().iterator());
 	}
 
 	@Override

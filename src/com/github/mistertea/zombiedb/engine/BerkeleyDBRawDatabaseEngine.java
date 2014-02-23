@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.github.mistertea.zombiedb.CloseableIterator;
+import com.github.mistertea.zombiedb.EmptyCloseableIteratorWrapper;
 import com.sleepycat.je.Cursor;
 import com.sleepycat.je.Database;
 import com.sleepycat.je.DatabaseConfig;
@@ -22,210 +24,214 @@ import com.sleepycat.je.OperationStatus;
 import com.sleepycat.je.Transaction;
 
 public class BerkeleyDBRawDatabaseEngine extends SingleLockDatabaseEngine {
-    private Environment myEnv;
+  private Environment myEnv;
 
-    // The databases that our application uses
-    private Map<String, Database> classDbMaps = new HashMap<String, Database>();
+  // The databases that our application uses
+  private Map<String, Database> classDbMaps = new HashMap<String, Database>();
 
-	private DatabaseConfig myDbConfig;
-	private String baseDbDirectory;
-	private String dbName;
-	
-	public BerkeleyDBRawDatabaseEngine(String baseDbDirectory, String dbName, boolean wipe, boolean transactional, boolean inMemory, boolean noCache) throws IOException {
-		super();
-		this.baseDbDirectory = baseDbDirectory;
-		this.dbName = dbName;
-		
-		if(inMemory) {
-			throw new IOException("In-memory BDB not supported");
-		}
-		
-		boolean readOnly = false;
-		
-        EnvironmentConfig myEnvConfig = new EnvironmentConfig();
-        if(noCache) {
-        	// Can't disable cache, but can make the smallest cache possible
-        	myEnvConfig.setCacheSize(96 * 1024);
-        }
-        myDbConfig = new DatabaseConfig();
+  private DatabaseConfig myDbConfig;
+  private String baseDbDirectory;
+  private String dbName;
 
-        // If the environment is read-only, then
-        // make the databases read-only too.
-        myEnvConfig.setReadOnly(readOnly);
-        myDbConfig.setReadOnly(readOnly);
+  public BerkeleyDBRawDatabaseEngine(String baseDbDirectory, String dbName,
+      boolean wipe, boolean transactional, boolean inMemory, boolean noCache)
+      throws IOException {
+    super();
+    this.baseDbDirectory = baseDbDirectory;
+    this.dbName = dbName;
 
-        // If the environment is opened for write, then we want to be
-        // able to create the environment and databases if
-        // they do not exist.
-        myEnvConfig.setAllowCreate(!readOnly);
-        myDbConfig.setAllowCreate(!readOnly);
+    if (inMemory) {
+      throw new IOException("In-memory BDB not supported");
+    }
 
-        // Allow transactions if we are writing to the database
-        myEnvConfig.setTransactional(transactional);
-        myDbConfig.setTransactional(transactional);
+    boolean readOnly = false;
 
-        if(wipe) {
-        	wipeDatabase();
-        }
-        
-        // Open the environment
-        File dbRoot = new File(baseDbDirectory + File.separator + dbName + File.separator);
-        dbRoot.mkdir();
-        myEnv = new Environment(dbRoot, myEnvConfig);
-	}
+    EnvironmentConfig myEnvConfig = new EnvironmentConfig();
+    if (noCache) {
+      // Can't disable cache, but can make the smallest cache possible
+      myEnvConfig.setCacheSize(96 * 1024);
+    }
+    myDbConfig = new DatabaseConfig();
 
-	@Override
-	public synchronized void clear(String family) {
-		Database db = getOrCreateDb(family);
-        // Get a cursor
-		Transaction transaction = myEnv.beginTransaction(null, null);
-        Cursor cursor = db.openCursor(transaction, null);
+    // If the environment is read-only, then
+    // make the databases read-only too.
+    myEnvConfig.setReadOnly(readOnly);
+    myDbConfig.setReadOnly(readOnly);
 
-        // DatabaseEntry objects used for reading records
-        DatabaseEntry foundKey = new DatabaseEntry();
-        DatabaseEntry foundData = new DatabaseEntry();
+    // If the environment is opened for write, then we want to be
+    // able to create the environment and databases if
+    // they do not exist.
+    myEnvConfig.setAllowCreate(!readOnly);
+    myDbConfig.setAllowCreate(!readOnly);
 
-        while (cursor.getNext(foundKey, foundData,
-                LockMode.DEFAULT) == OperationStatus.SUCCESS) {
-        	cursor.delete();
-        }
-        cursor.close();
-        
-        transaction.commit();
-	}
+    // Allow transactions if we are writing to the database
+    myEnvConfig.setTransactional(transactional);
+    myDbConfig.setTransactional(transactional);
 
-	@Override
-	public synchronized boolean commit() {
-		return true;
-	}
-	
-	@Override
-	public synchronized boolean containsKey(String className, String s) {
-		return getBytes(className,s)!=null;
-	}
+    if (wipe) {
+      wipeDatabase();
+    }
 
-	@Override
-	public synchronized void deleteKey(String className, String keyString) throws IOException {
-		Database db = getOrCreateDb(className);
-        DatabaseEntry key;
-		try {
-			key = new DatabaseEntry(keyString.getBytes("UTF-8"));
-			db.delete(null, key);
-		} catch (UnsupportedEncodingException e) {
-			throw new IOException(e);
-		}
-	}
+    // Open the environment
+    File dbRoot = new File(baseDbDirectory + File.separator + dbName
+        + File.separator);
+    dbRoot.mkdir();
+    myEnv = new Environment(dbRoot, myEnvConfig);
+  }
 
-	@Override
-	public synchronized void destroy() {
-		if(myEnv != null) {
-			myEnv.close();
-		}
-	}
+  @Override
+  public synchronized void clear(String family) {
+    Database db = getOrCreateDb(family);
+    // Get a cursor
+    Transaction transaction = myEnv.beginTransaction(null, null);
+    Cursor cursor = db.openCursor(transaction, null);
 
-	@Override
-	public synchronized Set<String> getAllIds(String family) {
-		Database db = getOrCreateDb(family);
-		Set<String> keys = new HashSet<String>();
-        // Get a cursor
-        Cursor cursor = db.openCursor(null, null);
+    // DatabaseEntry objects used for reading records
+    DatabaseEntry foundKey = new DatabaseEntry();
+    DatabaseEntry foundData = new DatabaseEntry();
 
-        // DatabaseEntry objects used for reading records
-        DatabaseEntry foundKey = new DatabaseEntry();
-        DatabaseEntry foundData = new DatabaseEntry();
+    while (cursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS) {
+      cursor.delete();
+    }
+    cursor.close();
 
-        try {
-	        while (cursor.getNext(foundKey, foundData,
-	                LockMode.DEFAULT) == OperationStatus.SUCCESS) {
-	        	keys.add(new String(foundKey.getData(),"UTF-8"));
-	        }
-        } catch(UnsupportedEncodingException e) {
-        	e.printStackTrace();
-        }
-        cursor.close();
-        return keys;
-	}
+    transaction.commit();
+  }
 
-	@Override
-	public synchronized byte[] getBytes(String className, String s) {
-		Database db = getOrCreateDb(className);
+  @Override
+  public synchronized boolean commit() {
+    return true;
+  }
 
-        DatabaseEntry key;
-		try {
-			key = new DatabaseEntry(s.getBytes("UTF-8"));
-		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
-			return null;
-		}
-        DatabaseEntry value = new DatabaseEntry();
-		db.get(null, key, value, null);
-		return value.getData();
-	}
+  @Override
+  public synchronized boolean containsKey(String className, String s) {
+    return getBytes(className, s) != null;
+  }
 
-	private synchronized Database getOrCreateDb(String className) {
-		Database dbMap = classDbMaps.get(className);
-		if(dbMap == null) {
-	        classDbMaps.put(className,myEnv.openDatabase(null,className,myDbConfig));
-			return classDbMaps.get(className);
-		}
-		return dbMap;
-	}
+  @Override
+  public synchronized void deleteKey(String className, String keyString)
+      throws IOException {
+    Database db = getOrCreateDb(className);
+    DatabaseEntry key;
+    try {
+      key = new DatabaseEntry(keyString.getBytes("UTF-8"));
+      db.delete(null, key);
+    } catch (UnsupportedEncodingException e) {
+      throw new IOException(e);
+    }
+  }
 
-	@Override
-	public synchronized Iterator<byte[]> getValueIterator(String family) {
-		Database db = getOrCreateDb(family);
-		List<byte[]> values = new ArrayList<byte[]>();
-        // Get a cursor
-        Cursor cursor = db.openCursor(null, null);
+  @Override
+  public synchronized void destroy() {
+    if (myEnv != null) {
+      myEnv.close();
+    }
+  }
 
-        // DatabaseEntry objects used for reading records
-        DatabaseEntry foundKey = new DatabaseEntry();
-        DatabaseEntry foundData = new DatabaseEntry();
+  @Override
+  public synchronized Set<String> getAllIds(String family) {
+    Database db = getOrCreateDb(family);
+    Set<String> keys = new HashSet<String>();
+    // Get a cursor
+    Cursor cursor = db.openCursor(null, null);
 
-        while (cursor.getNext(foundKey, foundData,
-                LockMode.DEFAULT) == OperationStatus.SUCCESS) {
-        	values.add(foundData.getData());
-        }
-        cursor.close();
-        
-		return values.iterator();
-	}
+    // DatabaseEntry objects used for reading records
+    DatabaseEntry foundKey = new DatabaseEntry();
+    DatabaseEntry foundData = new DatabaseEntry();
 
-	@Override
-	public synchronized int numValues(String family) {
-		Database db = getOrCreateDb(family);
-		return (int)db.count();
-	}
+    try {
+      while (cursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS) {
+        keys.add(new String(foundKey.getData(), "UTF-8"));
+      }
+    } catch (UnsupportedEncodingException e) {
+      e.printStackTrace();
+    }
+    cursor.close();
+    return keys;
+  }
 
-	@Override
-	public synchronized void putBytesBatch(String className, String keyString, byte[] valueBytes) {
-		Database db = getOrCreateDb(className);
+  @Override
+  public synchronized byte[] getBytes(String className, String s) {
+    Database db = getOrCreateDb(className);
 
-        DatabaseEntry key;
-		try {
-			key = new DatabaseEntry(keyString.getBytes("UTF-8"));
-		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
-			return;
-		}
-        DatabaseEntry value = new DatabaseEntry(valueBytes);
-		db.put(null, key, value);
-	}
+    DatabaseEntry key;
+    try {
+      key = new DatabaseEntry(s.getBytes("UTF-8"));
+    } catch (UnsupportedEncodingException e) {
+      e.printStackTrace();
+      return null;
+    }
+    DatabaseEntry value = new DatabaseEntry();
+    db.get(null, key, value, null);
+    return value.getData();
+  }
 
-	@Override
-	public synchronized void putBytesAtomic(String className, String keyString, byte[] valueBytes) {
-		putBytesBatch(className, keyString, valueBytes);
-	}
-	
-	@Override
-	public void wipeDatabase() throws IOException {
-    	File baseDir = new File(baseDbDirectory + File.pathSeparator + dbName);
-    	if(baseDir.exists()) {
-    		File files[] = baseDir.listFiles();
-    		for(File file : files) {
-    			file.delete();
-    		}
-    	}
-    	classDbMaps.clear();
-	}
+  private synchronized Database getOrCreateDb(String className) {
+    Database dbMap = classDbMaps.get(className);
+    if (dbMap == null) {
+      classDbMaps.put(className,
+          myEnv.openDatabase(null, className, myDbConfig));
+      return classDbMaps.get(className);
+    }
+    return dbMap;
+  }
+
+  @Override
+  public synchronized CloseableIterator<byte[]> getValueIterator(String family) {
+    Database db = getOrCreateDb(family);
+    List<byte[]> values = new ArrayList<byte[]>();
+    // Get a cursor
+    Cursor cursor = db.openCursor(null, null);
+
+    // DatabaseEntry objects used for reading records
+    DatabaseEntry foundKey = new DatabaseEntry();
+    DatabaseEntry foundData = new DatabaseEntry();
+
+    while (cursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS) {
+      values.add(foundData.getData());
+    }
+    cursor.close();
+
+    return new EmptyCloseableIteratorWrapper<byte[]>(values.iterator());
+  }
+
+  @Override
+  public synchronized int numValues(String family) {
+    Database db = getOrCreateDb(family);
+    return (int) db.count();
+  }
+
+  @Override
+  public synchronized void putBytesBatch(String className, String keyString,
+      byte[] valueBytes) {
+    Database db = getOrCreateDb(className);
+
+    DatabaseEntry key;
+    try {
+      key = new DatabaseEntry(keyString.getBytes("UTF-8"));
+    } catch (UnsupportedEncodingException e) {
+      e.printStackTrace();
+      return;
+    }
+    DatabaseEntry value = new DatabaseEntry(valueBytes);
+    db.put(null, key, value);
+  }
+
+  @Override
+  public synchronized void putBytesAtomic(String className, String keyString,
+      byte[] valueBytes) {
+    putBytesBatch(className, keyString, valueBytes);
+  }
+
+  @Override
+  public void wipeDatabase() throws IOException {
+    File baseDir = new File(baseDbDirectory + File.pathSeparator + dbName);
+    if (baseDir.exists()) {
+      File files[] = baseDir.listFiles();
+      for (File file : files) {
+        file.delete();
+      }
+    }
+    classDbMaps.clear();
+  }
 }

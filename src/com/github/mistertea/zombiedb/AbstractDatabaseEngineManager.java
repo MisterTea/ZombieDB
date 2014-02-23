@@ -241,8 +241,8 @@ public abstract class AbstractDatabaseEngineManager {
 		}
 		writer.writeNext(tagNames.toArray(new String[0]));
 
+    ThriftWrapperIterator<F, T> it = getValueIterator(in);
 		try {
-			ThriftWrapperIterator<F, T> it = getValueIterator(in);
 			List<String> line = new ArrayList<String>();
 			while (it.hasNext()) {
 				try {
@@ -267,6 +267,7 @@ public abstract class AbstractDatabaseEngineManager {
 			}
 		} finally {
 			writer.close();
+			it.close();
 		}
 	}
 
@@ -287,8 +288,8 @@ public abstract class AbstractDatabaseEngineManager {
 		File file = new File(basePath, in.getSimpleName() + ".zombiedb.bz2");
 		BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
 				new BZip2CompressorOutputStream(new FileOutputStream(file))));
+    ThriftWrapperIterator<F, T> it = getValueIterator(in);
 		try {
-			ThriftWrapperIterator<F, T> it = getValueIterator(in);
 			while (it.hasNext()) {
 				try {
 					T t = it.next();
@@ -301,6 +302,7 @@ public abstract class AbstractDatabaseEngineManager {
 			}
 		} finally {
 			writer.close();
+			it.close();
 		}
 	}
 

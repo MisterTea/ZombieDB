@@ -32,14 +32,18 @@ import org.apache.hadoop.hbase.client.Scan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class HBaseDatabaseEngine implements DatabaseEngine {
-	class HBaseIteratorWrapper implements Iterator<byte[]> {
-		private Iterator<Result> resultIterator;
-		private byte[] family;
+import com.github.mistertea.zombiedb.CloseableIterator;
 
-		public HBaseIteratorWrapper(byte[] family, Iterator<Result> resultIterator) {
+public class HBaseDatabaseEngine implements DatabaseEngine {
+	class HBaseIteratorWrapper implements CloseableIterator<byte[]> {
+		private byte[] family;
+    private ResultScanner scanner;
+    private Iterator<Result> resultIterator;
+
+		public HBaseIteratorWrapper(byte[] family, ResultScanner scanner) {
 			this.family = family;
-			this.resultIterator = resultIterator;
+			this.scanner = scanner;
+			this.resultIterator = scanner.iterator();
 		}
 
 		@Override
@@ -56,6 +60,11 @@ public class HBaseDatabaseEngine implements DatabaseEngine {
 		public void remove() {
 			resultIterator.remove();
 		}
+
+    @Override
+    public void close() throws IOException {
+      scanner.close();
+    }
 		
 	}
 	final Logger logger = LoggerFactory.getLogger(HBaseDatabaseEngine.class);
@@ -235,13 +244,13 @@ public class HBaseDatabaseEngine implements DatabaseEngine {
 	}
 	
 	@Override
-	public Iterator<byte[]> getValueIterator(String family) throws IOException {
+	public CloseableIterator<byte[]> getValueIterator(String family) throws IOException {
 		createColumnFamilyIfNecessary(family);
 		Scan scan = new Scan();
 		byte[] familyBytes = family.getBytes("ISO-8859-1");
 		scan.addFamily(familyBytes);
 		ResultScanner scanner = table.getScanner(scan);
-		return new HBaseIteratorWrapper(familyBytes, scanner.iterator());
+		return new HBaseIteratorWrapper(familyBytes, scanner);
 	}
 
 	@Override
