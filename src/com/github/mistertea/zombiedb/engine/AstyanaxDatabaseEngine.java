@@ -128,6 +128,7 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
           statusContainer.status=ExitStatus.Status.COMPLETE;
         }
       });
+      thread.start();
     }
     
     private void blockForNextObject() {
