@@ -68,20 +68,21 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
 
   static class ExitStatus {
     public enum Status {
-      RUNNING,
-      FAILED,
-      COMPLETE, ABORTED,
+      RUNNING, FAILED, COMPLETE, ABORTED,
     }
+
     public Status status = Status.RUNNING;
   }
-  
-  public class ThriftWrapperCassandraIterator implements CloseableIterator<byte[]> {
+
+  public class ThriftWrapperCassandraIterator implements
+      CloseableIterator<byte[]> {
     private byte[] nextObject;
     Thread thread;
-    
+
     private final ExitStatus statusContainer = new ExitStatus();
 
-    public ThriftWrapperCassandraIterator(final String family) throws IOException {
+    public ThriftWrapperCassandraIterator(final String family)
+        throws IOException {
       thread = new Thread(new Runnable() {
 
         @Override
@@ -106,7 +107,7 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
                         Thread.sleep(100);
                       } catch (InterruptedException e) {
                         e.printStackTrace();
-                        statusContainer.status=ExitStatus.Status.FAILED;
+                        statusContainer.status = ExitStatus.Status.FAILED;
                         return false;
                       }
                     }
@@ -117,22 +118,23 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
                 }).build().call();
             if (!result) {
               System.out.println("Reading all keys failed!");
-              statusContainer.status=ExitStatus.Status.FAILED;
+              statusContainer.status = ExitStatus.Status.FAILED;
             }
           } catch (Exception e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
-            statusContainer.status=ExitStatus.Status.FAILED;
+            statusContainer.status = ExitStatus.Status.FAILED;
             throw new RuntimeException(e);
           }
-          statusContainer.status=ExitStatus.Status.COMPLETE;
+          statusContainer.status = ExitStatus.Status.COMPLETE;
         }
       });
       thread.start();
     }
-    
+
     private void blockForNextObject() {
-      while (nextObject == null && statusContainer.status == ExitStatus.Status.RUNNING) {
+      while (nextObject == null
+          && statusContainer.status == ExitStatus.Status.RUNNING) {
         try {
           Thread.sleep(1000);
         } catch (InterruptedException e) {
@@ -335,9 +337,7 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
           .forEachRow(new Function<Row<String, String>, Boolean>() {
             @Override
             public Boolean apply(@Nullable Row<String, String> row) {
-              if (row.getColumns().getColumnByName("Data") != null) {
-                retval.add(row.getKey());
-              }
+              retval.add(row.getKey());
               return true;
             }
           }).build().call();
