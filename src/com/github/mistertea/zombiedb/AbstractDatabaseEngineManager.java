@@ -196,7 +196,9 @@ public abstract class AbstractDatabaseEngineManager {
 	public <F extends TFieldIdEnum, T extends TBase<?, F>> void deleteFromId(
 			Class<T> in, String id) throws IOException {
 		T t = get(in, id);
-		delete(t);
+		if (t != null) {
+		  delete(t);
+		}
 	}
 
 	/**
