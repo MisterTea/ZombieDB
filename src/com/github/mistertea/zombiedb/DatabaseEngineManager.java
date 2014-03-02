@@ -37,6 +37,9 @@ public class DatabaseEngineManager extends AbstractDatabaseEngineManager {
   @Override
   public synchronized <F extends TFieldIdEnum, T extends TBase<?, F>> void delete(
       T thrift) throws IOException {
+    if (thrift == null) {
+      return;
+    }
     String id;
     try {
       id = (String) thrift.getFieldValue(thrift.fieldForId(1));
