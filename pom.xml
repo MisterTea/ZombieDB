@@ -9,7 +9,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.github.mistertea</groupId>
   <artifactId>zombiedb</artifactId>
-  <version>1.22</version>
+  <version>1.23-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>Zombie DB</name>
   <description>Thrift-specified Database wrapper for CRUD of thrift objects.</description>
