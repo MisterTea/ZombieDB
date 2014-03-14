@@ -104,7 +104,7 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
                         return false;
                       }
                       try {
-                        Thread.sleep(100);
+                        Thread.sleep(1);
                       } catch (InterruptedException e) {
                         e.printStackTrace();
                         statusContainer.status = ExitStatus.Status.FAILED;
@@ -136,7 +136,7 @@ public class AstyanaxDatabaseEngine implements DatabaseEngine {
       while (nextObject == null
           && statusContainer.status == ExitStatus.Status.RUNNING) {
         try {
-          Thread.sleep(1000);
+          Thread.sleep(1);
         } catch (InterruptedException e) {
           // TODO Auto-generated catch block
           e.printStackTrace();
