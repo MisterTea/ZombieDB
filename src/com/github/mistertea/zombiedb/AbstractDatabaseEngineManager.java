@@ -428,7 +428,7 @@ public abstract class AbstractDatabaseEngineManager {
 					T t = in.newInstance();
 					jsonDeserializer.deserialize(t, line, "ISO-8859-1");
 					upsert(t);
-					if (count % 100 == 0)
+					if (count % 10000 == 0)
 						databaseEngine.commit();
 					count++;
 				} catch (Exception e) {
