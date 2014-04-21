@@ -53,7 +53,7 @@ public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 		new File(dbDirectory).mkdirs();
 		DBMaker dbMaker = null;
 		if (inMemory) {
-			dbMaker = DBMaker.newDirectMemoryDB();
+			dbMaker = DBMaker.newMemoryDB();
 		} else {
 			dbMaker = DBMaker.newFileDB(new File(dbFileName));
 			if (noCache) {
@@ -64,8 +64,7 @@ public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 		}
 		dbMaker.closeOnJvmShutdown();
 		if (!transactional) {
-			dbMaker.syncOnCommitDisable().asyncWriteDisable()
-					.writeAheadLogDisable();
+			dbMaker.transactionDisable();
 		}
 		database = dbMaker.make();
 	}
@@ -119,7 +118,7 @@ public class JdbmDatabaseEngine extends SingleLockDatabaseEngine {
 			if (dbMap == null) {
 				dbMap = database.getHashMap(className);
 				if (dbMap == null) {
-					dbMap = database.createHashMap(className, true, null, null);
+					dbMap = database.createHashMap(className).counterEnable().make();
 				}
 			}
 			classDbMaps.put(className, dbMap);
